@@ -19,11 +19,15 @@ Este repositório usa a **Promptaria** como framework de agente.
 
 ## Sobre o projeto
 
-Jogo de Super TicTacToe (jogo da velha em tabuleiros aninhados). Projeto em fase de elicitação de requisitos: escopo, modos de jogo e plataforma ainda serão definidos via spec antes de qualquer código.
+Jogo de Super TicTacToe (jogo da velha em tabuleiros aninhados) jogável no navegador, com três modos: multiplayer local, contra bot (três dificuldades) e multiplayer via web p2p (WebRTC + PeerJS, sem backend próprio). Publicado como site estático no GitHub Pages. Interface bilíngue (português e inglês), visual estilo giz/caderno. A spec fundadora é a `STT` (em `.specs/STT/spec.md`), com entrega em etapas: E1 motor + local, E2 bot, E3 p2p.
 
 ## Stack
 
-[a definir]: a stack será escolhida depois da elicitação de requisitos. Atualizar esta seção assim que decidida.
+- Frontend: React + TypeScript + Vite (SPA estática, sem backend)
+- Multiplayer: WebRTC DataChannel com sinalização via broker público do PeerJS
+- Persistência: armazenamento do navegador (localStorage/IndexedDB)
+- Testes: Vitest (unitários, motor e bot) + Playwright (interface)
+- Deploy: GitHub Actions builda, roda os testes e publica no GitHub Pages a cada push na `main` (teste falhando bloqueia a publicação)
 
 <!-- Exemplo de formato (substitua pelo real durante configurar-projeto):
 - Backend: Java 21 + Spring Boot 3.x
@@ -34,15 +38,19 @@ Jogo de Super TicTacToe (jogo da velha em tabuleiros aninhados). Projeto em fase
 
 ## Como rodar localmente
 
-[a definir]: depende da stack.
+- `npm install` na primeira vez
+- `npm run dev` sobe o Vite em modo desenvolvimento
+- `npm run build` gera o site estático em `dist/` (o mesmo que o CI publica)
 
 ## Como testar
 
-[a definir]: depende da stack.
+- `npm test` roda os unitários (Vitest): motor de regras e bot
+- `npm run test:ui` roda os testes de interface (Playwright)
+- O CI roda ambos em todo push; publicação no Pages só acontece com tudo verde
 
 ## Estrutura
 
-[a definir]: por enquanto só a infra da Promptaria (`.claude/`, `.specs/`). A estrutura de código nasce com a primeira demanda implementada.
+[a definir]: a estrutura de pastas nasce com a etapa E1 da spec STT e será documentada aqui. Direção acordada: motor de regras isolado da UI (o motor é recursivo, profundidade N, e não pode depender de React).
 
 ## Padrão de commit
 
