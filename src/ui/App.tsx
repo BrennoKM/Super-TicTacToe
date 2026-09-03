@@ -487,6 +487,11 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* RN-SOM-03: as gravações de som têm licença de atribuição. */}
+      <footer className="app-footer" data-testid="sound-credits">
+        {msgs.soundCredits}
+      </footer>
     </div>
   );
 }

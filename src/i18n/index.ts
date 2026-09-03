@@ -99,6 +99,7 @@ const pt = {
   soundOff: 'Som desligado',
   leaveConfirm: 'Sair',
   keepPlaying: 'Continuar jogando',
+  soundCredits: 'Sons de escrita: gravações de Daniel Simion e Lisa Redfern (soundbible.com), com atribuição.',
 };
 
 const en: typeof pt = {
@@ -198,6 +199,7 @@ const en: typeof pt = {
   soundOff: 'Sound off',
   leaveConfirm: 'Leave',
   keepPlaying: 'Keep playing',
+  soundCredits: 'Writing sounds: recordings by Daniel Simion and Lisa Redfern (soundbible.com), attribution required.',
 };
 
 export type Messages = typeof pt;

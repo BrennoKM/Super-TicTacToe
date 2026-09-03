@@ -558,3 +558,11 @@ button.ghost {
     gap: 5px;
   }
 }
+
+.app-footer {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  margin-top: 1.5rem;
+  padding-bottom: 0.5rem;
+}

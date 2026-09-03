@@ -1,6 +1,12 @@
-// Som de escrita sintetizado (spec SOM). Sem arquivos de áudio: o risco é
-// reproduzido pela física do atrito, com trem de grãos, ressonância do material
-// e envelope de gesto.
+// Som de escrita (spec SOM), a partir de gravações reais curtas, não síntese.
+//
+// A pesquisa de 2026-09-03 confirmou que não há atalho de síntese pronto pra
+// esse som (ver Notas Técnicas da spec): a comunidade inteira usa gravação, e
+// o guincho do giz é tema de artigo científico (fenômeno stick-slip). Cada
+// tentativa de sintetizar (ruído filtrado, trem de grãos, banda ressonante)
+// ficou ou percussiva ou com formato de explosão. Os clipes usados aqui vêm
+// de gravações de domínio livre com atribuição (ver créditos no rodapé do
+// jogo e RN-SOM-03 da spec).
 
 export type Theme = 'light' | 'dark';
 export type Mark = 'X' | 'O';
@@ -17,8 +23,7 @@ export function isMuted(): boolean {
   return muted;
 }
 
-// Descarta o contexto atual. Serve para o áudio se recuperar de um contexto
-// morto e para medir os sons num contexto offline durante a verificação.
+// Descarta o contexto atual, pra recuperação de um contexto morto.
 export function resetAudio(): void {
   try {
     void context?.close();
@@ -45,125 +50,92 @@ function ensureContext(): AudioContext | null {
   }
 }
 
-// Risco é atrito de agarra e escorrega: o giz ou o grafite prende e solta
-// centenas de vezes por segundo, e cada solta é um micro impacto. Por isso o
-// material bruto é um trem de grãos irregulares, não ruído contínuo (que soa
-// como chiado). A densidade e o tamanho do grão é que dão a textura.
-function scratchBuffer(ctx: AudioContext, duration: number, chalk: boolean): AudioBuffer {
-  const rate = ctx.sampleRate;
-  const length = Math.max(1, Math.ceil(rate * duration));
-  const buffer = ctx.createBuffer(1, length, rate);
-  const data = buffer.getChannelData(0);
+const CLIP_FILES = {
+  light: {
+    x1: 'pencil-x1.mp3',
+    x2: 'pencil-x2.mp3',
+    o: 'pencil-o.mp3',
+    small: 'pencil-strike-small.mp3',
+    big: 'pencil-strike-big.mp3',
+  },
+  dark: {
+    x1: 'chalk-x1.mp3',
+    x2: 'chalk-x2.mp3',
+    o: 'chalk-o.mp3',
+    small: 'chalk-strike-small.mp3',
+    big: 'chalk-strike-big.mp3',
+  },
+} as const;
 
-  // Transientes muito curtos e espaçados: o ouvido precisa distinguir cada
-  // agarra. Grão longo demais vira sopro, e sopro denso vira estouro.
-  const grainsPerSecond = chalk ? 900 : 600;
-  const grainLength = rate * (chalk ? 0.0008 : 0.0016);
+type ClipKey = keyof typeof CLIP_FILES.light;
 
-  let cursor = 0;
-  while (cursor < length) {
-    const amplitude = 0.25 + Math.random() * 0.75;
-    const grain = Math.max(3, Math.round(grainLength * (0.6 + Math.random() * 0.8)));
-    for (let j = 0; j < grain && cursor + j < length; j++) {
-      const decay = Math.exp(-j / (grain * 0.3));
-      data[cursor + j] += (Math.random() * 2 - 1) * amplitude * decay;
-    }
-    cursor += Math.max(2, Math.round((rate / grainsPerSecond) * (0.3 + Math.random() * 1.8)));
+const bufferCache = new Map<string, Promise<AudioBuffer | null>>();
+
+function clipUrl(file: string): string {
+  // import.meta.env.BASE_URL respeita o VITE_BASE do deploy (subpasta do
+  // GitHub Pages); sem isso os clipes 404ariam em produção.
+  return `${import.meta.env.BASE_URL}sounds/${file}`;
+}
+
+async function loadClip(ctx: AudioContext, file: string): Promise<AudioBuffer | null> {
+  const key = `${ctx.sampleRate}:${file}`;
+  let pending = bufferCache.get(key);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const response = await fetch(clipUrl(file));
+        if (!response.ok) return null;
+        const bytes = await response.arrayBuffer();
+        return await ctx.decodeAudioData(bytes);
+      } catch {
+        return null;
+      }
+    })();
+    bufferCache.set(key, pending);
   }
-  return buffer;
+  return pending;
 }
 
-interface ScratchOptions {
-  duration: number; // segundos
-  gain: number;
-  // Caneta e lápis: banda média, fricção mais fechada e regular.
-  // Giz: banda mais alta e áspera, com fricção mais irregular.
-  theme: Theme;
-  startAt?: number;
-}
-
-// Monta um traço: grãos de atrito passando por passa-alta, ressonância do
-// material e envelope do gesto da mão.
-function scratch(ctx: AudioContext, options: ScratchOptions): void {
-  const { duration, gain, theme } = options;
-  const start = ctx.currentTime + (options.startAt ?? 0);
-  const chalk = theme === 'dark';
-
-  const source = ctx.createBufferSource();
-  source.buffer = scratchBuffer(ctx, duration, chalk);
-
-  // Escrita quase não tem energia grave. Deixar grave passar é o que dá peso
-  // de pancada, e com envelope que decai vira efeito de explosão.
-  const highpass = ctx.createBiquadFilter();
-  highpass.type = 'highpass';
-  highpass.frequency.value = chalk ? 1800 : 900;
-
-  // O caráter do material mora entre 2 e 5 kHz (é a faixa que a literatura de
-  // arranhado em quadro-negro aponta como a marcante). Realce fixo, sem
-  // varredura: varredura descendente é assinatura de explosão, não de risco.
-  const presence = ctx.createBiquadFilter();
-  presence.type = 'peaking';
-  presence.frequency.value = (chalk ? 3400 : 2100) * (0.95 + Math.random() * 0.1);
-  presence.Q.value = 0.9;
-  presence.gain.value = chalk ? 7 : 5;
-
-  // Corta o siseio muito agudo, que soaria como estática.
-  const lowpass = ctx.createBiquadFilter();
-  lowpass.type = 'lowpass';
-  lowpass.frequency.value = chalk ? 9000 : 6500;
-
-  // Envelope de arrasto: entra rápido, mantém volume praticamente constante e
-  // sai rápido. Nada de inchar e decair, que é o formato de estouro.
-  const steps = Math.max(48, Math.round(duration * 200));
-  const curve = new Float32Array(steps);
-  const wobbleHz = 9 + Math.random() * 8;
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const onset = Math.min(1, t / 0.05);
-    const offset = t > 0.93 ? (1 - t) / 0.07 : 1;
-    // Micro tremor da mão, sem alterar o corpo do som.
-    const hand = 1 + 0.14 * Math.sin(t * duration * wobbleHz * 2 * Math.PI);
-    curve[i] = gain * onset * offset * hand;
-  }
-  curve[steps - 1] = 0;
-
-  const envelope = ctx.createGain();
-  envelope.gain.setValueCurveAtTime(curve, start, duration);
-
-  source.connect(highpass).connect(presence).connect(lowpass).connect(envelope).connect(ctx.destination);
-  source.start(start);
-  source.stop(start + duration + 0.03);
-}
-
-// REQ-SOM-02: X são dois riscos rápidos; O é um traço único mais longo.
-export function playMark(mark: Mark, theme: Theme): void {
+// Toca um clipe com leve variação de altura e volume, pra jogadas seguidas
+// não soarem idênticas (o mesmo cuidado que a versão sintetizada já tinha).
+async function playClip(theme: Theme, key: ClipKey, gain: number, startAt = 0): Promise<void> {
   const ctx = ensureContext();
   if (ctx === null) return;
+  const file = CLIP_FILES[theme][key];
+  const buffer = await loadClip(ctx, file);
+  if (buffer === null || muted) return;
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = 0.94 + Math.random() * 0.12;
+
+  const envelope = ctx.createGain();
+  envelope.gain.value = gain * (0.88 + Math.random() * 0.24);
+
+  source.connect(envelope).connect(ctx.destination);
+  const when = ctx.currentTime + startAt;
+  source.start(when);
+}
+
+// REQ-SOM-02: X são dois traços curtos com pausa real entre eles (a mão
+// tira o material da superfície); O é um traço único mais longo.
+export function playMark(mark: Mark, theme: Theme): void {
   try {
-    // O X são dois traços rápidos, e entre eles a mão tira o giz ou o lápis
-    // da superfície: por isso há silêncio real no meio, não um traço só
-    // partido. O O é um movimento único, contínuo e mais demorado.
     if (mark === 'X') {
-      scratch(ctx, { duration: 0.24, gain: 0.3, theme });
-      scratch(ctx, { duration: 0.22, gain: 0.28, theme, startAt: 0.42 });
+      void playClip(theme, 'x1', 0.85);
+      void playClip(theme, 'x2', 0.8, 0.34);
     } else {
-      scratch(ctx, { duration: 0.8, gain: 0.24, theme });
+      void playClip(theme, 'o', 0.75);
     }
   } catch {
     // áudio indisponível: segue em silêncio
   }
 }
 
-// REQ-SOM-09 e 10: o risco é um traço contínuo, e o do tabuleiro grande é maior.
+// REQ-SOM-09 e 10: o risco é um traço contínuo, maior no tabuleiro grande.
 export function playStrike(scale: StrikeScale, theme: Theme): void {
-  const ctx = ensureContext();
-  if (ctx === null) return;
   try {
-    scratch(ctx, {
-      duration: scale === 'big' ? 1.7 : 0.95,
-      gain: scale === 'big' ? 0.4 : 0.32,
-      theme,
-    });
+    void playClip(theme, scale === 'big' ? 'big' : 'small', scale === 'big' ? 0.95 : 0.8);
   } catch {
     // áudio indisponível: segue em silêncio
   }
