@@ -50,7 +50,13 @@ Jogo de Super TicTacToe (jogo da velha em tabuleiros aninhados) jogável no nave
 
 ## Estrutura
 
-[a definir]: a estrutura de pastas nasce com a etapa E1 da spec STT e será documentada aqui. Direção acordada: motor de regras isolado da UI (o motor é recursivo, profundidade N, e não pode depender de React).
+- `src/engine/`: motor de regras em TypeScript puro (recursivo, profundidade N). **Não pode importar React nem nada de UI.**
+- `src/i18n/`: textos em português e inglês e detecção de idioma
+- `src/storage/`: persistência em localStorage (preferências, partida em andamento)
+- `src/ui/`: componentes React (App, SetupScreen, GameScreen, BoardView) e temas CSS (caderno/lousa)
+- `tests/engine/`: unitários Vitest do motor (cada AC da spec vira teste nomeado)
+- `tests/e2e/`: Playwright (fluxos de interface)
+- `.github/workflows/ci.yml`: testes + deploy no Pages
 
 ## Padrão de commit
 
