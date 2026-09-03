@@ -221,6 +221,43 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
+/* Checkbox: excluída da altura mínima e do raio de controle de linha única
+   (isso a esticava numa pílula alta e estreita, appearance:none some com o
+   quadradinho nativo e não sobra nada no lugar). Vira um quadrado pequeno
+   com marca de visto, do mesmo jeito de traço do resto da interface. */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--card-bg);
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+}
+
+input[type='checkbox']:checked {
+  background: color-mix(in srgb, var(--accent) 25%, var(--card-bg));
+  border-color: var(--accent);
+}
+
+input[type='checkbox']:checked::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--accent);
+}
+
 .card {
   background: var(--card-bg);
   border: 2px solid var(--line);
@@ -342,6 +379,15 @@ input:focus-visible {
   flex-direction: column;
   gap: 0.2rem;
   flex: 1;
+}
+
+/* Campo e seletor têm largura própria baseada em conteúdo por padrão
+   (o select mais que o input), então dois lado a lado num field-row
+   desalinhavam mesmo com o label tendo flex:1 igual. Força os dois a
+   preencherem o rótulo por completo. */
+.setup label > input:not([type='checkbox']),
+.setup label > select {
+  width: 100%;
 }
 
 .setup .check {

@@ -323,11 +323,13 @@ export function App() {
           {!online && replayEntry === null && (
             <button
               type="button"
-              className="ghost"
+              className="icon-btn"
               data-testid="library-open"
+              title={msgs.library}
+              aria-label={msgs.library}
               onClick={() => setLibraryOpen((open) => !open)}
             >
-              {msgs.library}
+              📚
             </button>
           )}
           <button
