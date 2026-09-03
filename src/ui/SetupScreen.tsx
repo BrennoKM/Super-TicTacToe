@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import type { Difficulty } from '../bot/bot';
 import type { GameConfig, Player, Tiebreak } from '../engine';
 import type { Messages } from '../i18n';
+import type { MatchMode } from '../storage/persist';
 
 export interface MatchSetup {
   config: GameConfig;
   playerNames: [string, string];
   player1Symbol: Player;
+  mode: MatchMode;
 }
 
 interface SetupScreenProps {
@@ -24,8 +27,14 @@ export function SetupScreen({ msgs, initial, onStart }: SetupScreenProps) {
   );
   const [clearVariant, setClearVariant] = useState(initial.config.clearVariant);
   const [tiebreak, setTiebreak] = useState<Tiebreak>(initial.config.tiebreak);
+  const [modeType, setModeType] = useState<'local' | 'bot'>(initial.mode.type);
+  const [difficulty, setDifficulty] = useState<Difficulty>(
+    initial.mode.type === 'bot' ? initial.mode.difficulty : 'medium',
+  );
 
   const symbol2: Player = symbol1 === 'X' ? 'O' : 'X';
+  const player2Label =
+    modeType === 'bot' ? `${msgs.botName}` : msgs.player2;
 
   function start() {
     onStart({
@@ -35,15 +44,46 @@ export function SetupScreen({ msgs, initial, onStart }: SetupScreenProps) {
         tiebreak,
         startingPlayer: starter === 1 ? symbol1 : symbol2,
       },
-      playerNames: [name1.trim(), name2.trim()],
+      playerNames: [name1.trim(), modeType === 'bot' ? '' : name2.trim()],
       player1Symbol: symbol1,
+      mode:
+        modeType === 'bot'
+          ? { type: 'bot', difficulty, humanSymbol: symbol1 }
+          : { type: 'local' },
     });
   }
 
   return (
     <section className="setup card">
       <h2>{msgs.newGame}</h2>
-      <p className="mode-tag">{msgs.localMode}</p>
+
+      <div className="field-row">
+        <label>
+          {msgs.mode}
+          <select
+            value={modeType}
+            onChange={(e) => setModeType(e.target.value as 'local' | 'bot')}
+            data-testid="mode"
+          >
+            <option value="local">{msgs.localMode}</option>
+            <option value="bot">{msgs.botMode}</option>
+          </select>
+        </label>
+        {modeType === 'bot' && (
+          <label>
+            {msgs.difficulty}
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+              data-testid="difficulty"
+            >
+              <option value="easy">{msgs.diffEasy}</option>
+              <option value="medium">{msgs.diffMedium}</option>
+              <option value="hard">{msgs.diffHard}</option>
+            </select>
+          </label>
+        )}
+      </div>
 
       <div className="field-row">
         <label>
@@ -55,15 +95,17 @@ export function SetupScreen({ msgs, initial, onStart }: SetupScreenProps) {
             data-testid="name-1"
           />
         </label>
-        <label>
-          {msgs.player2} ({symbol2})
-          <input
-            value={name2}
-            placeholder={msgs.playerNamePlaceholder}
-            onChange={(e) => setName2(e.target.value)}
-            data-testid="name-2"
-          />
-        </label>
+        {modeType === 'local' && (
+          <label>
+            {msgs.player2} ({symbol2})
+            <input
+              value={name2}
+              placeholder={msgs.playerNamePlaceholder}
+              onChange={(e) => setName2(e.target.value)}
+              data-testid="name-2"
+            />
+          </label>
+        )}
       </div>
 
       <div className="field-row">
@@ -86,7 +128,9 @@ export function SetupScreen({ msgs, initial, onStart }: SetupScreenProps) {
             data-testid="starter"
           >
             <option value={1}>{name1.trim() || msgs.player1}</option>
-            <option value={2}>{name2.trim() || msgs.player2}</option>
+            <option value={2}>
+              {modeType === 'bot' ? player2Label : name2.trim() || msgs.player2}
+            </option>
           </select>
         </label>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { chooseMove } from '../bot/bot';
 import { applyMove, createGame, otherPlayer, replay, serialize, undo } from '../engine';
 import type { GameState, Path, Player } from '../engine';
 import { detectLanguage, messages } from '../i18n';
@@ -10,7 +11,7 @@ import {
   saveMatch,
   savePreferences,
 } from '../storage/persist';
-import type { Preferences, SavedMatch, SessionScore } from '../storage/persist';
+import type { MatchMode, Preferences, SavedMatch, SessionScore } from '../storage/persist';
 import { GameScreen } from './GameScreen';
 import { SetupScreen } from './SetupScreen';
 import type { MatchSetup } from './SetupScreen';
@@ -21,6 +22,11 @@ interface Match {
   player1Symbol: Player;
   score: SessionScore;
   counted: boolean; // o resultado desta partida já entrou no placar?
+  mode: MatchMode;
+}
+
+function botSymbol(mode: MatchMode): Player | null {
+  return mode.type === 'bot' ? otherPlayer(mode.humanSymbol) : null;
 }
 
 const zeroScore: SessionScore = { X: 0, O: 0, draws: 0 };
@@ -59,6 +65,7 @@ export function App() {
         playerNames: m.playerNames,
         player1Symbol: m.player1Symbol,
         score: m.score,
+        mode: m.mode,
       });
     } else {
       clearMatch();
@@ -75,6 +82,7 @@ export function App() {
       playerNames: setup.playerNames,
       player1Symbol: setup.player1Symbol,
       lastConfig: setup.config,
+      lastMode: setup.mode,
     });
     setPendingResume(null);
     setAndPersist({
@@ -83,29 +91,52 @@ export function App() {
       player1Symbol: setup.player1Symbol,
       score: match?.score ?? zeroScore,
       counted: false,
+      mode: setup.mode,
     });
   }
 
-  function handleMove(path: Path) {
-    if (!match || match.state.result !== null) return;
+  function applyPath(current: Match, path: Path) {
     let state: GameState;
     try {
-      state = applyMove(match.state, path);
+      state = applyMove(current.state, path);
     } catch {
       return; // REQ-STT-02: jogada inválida não altera nada
     }
-    let { score, counted } = match;
+    let { score, counted } = current;
     if (state.result !== null && !counted) {
       score = { ...score };
       if (state.result === 'draw') score.draws += 1;
       else score[state.result] += 1;
       counted = true;
     }
-    setAndPersist({ ...match, state, score, counted });
+    setAndPersist({ ...current, state, score, counted });
   }
+
+  function handleHumanMove(path: Path) {
+    if (!match || match.state.result !== null) return;
+    // No modo bot, a vez do bot não aceita clique humano.
+    if (match.state.currentPlayer === botSymbol(match.mode)) return;
+    applyPath(match, path);
+  }
+
+  // Vez do bot: responde com um pequeno atraso pra jogada ser perceptível (AC-STT-07).
+  useEffect(() => {
+    if (!match || match.mode.type !== 'bot' || match.state.result !== null) return;
+    if (match.state.currentPlayer !== botSymbol(match.mode)) return;
+    const mode = match.mode;
+    const timer = setTimeout(() => {
+      applyPath(match, chooseMove(match.state, mode.difficulty));
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match]);
 
   function handleUndo() {
     if (!match || match.state.moves.length === 0) return;
+    // REQ-STT-07: contra o bot, desfaz o par (resposta do bot + jogada humana).
+    const bot = botSymbol(match.mode);
+    const count =
+      bot !== null && match.state.moves.at(-1)?.player === bot ? 2 : 1;
     // Desfazer após o fim reabre a partida; o placar da partida contada é revertido.
     let { score, counted } = match;
     if (counted && match.state.result !== null) {
@@ -114,7 +145,7 @@ export function App() {
       else score[match.state.result] -= 1;
       counted = false;
     }
-    setAndPersist({ ...match, state: undo(match.state), score, counted });
+    setAndPersist({ ...match, state: undo(match.state, count), score, counted });
   }
 
   // REQ-STT-08: revanche mantém adversário e regras, alternando quem começa.
@@ -141,6 +172,7 @@ export function App() {
         player1Symbol: pendingResume.player1Symbol,
         score: pendingResume.score,
         counted: false,
+        mode: pendingResume.mode,
       });
     } catch {
       clearMatch();
@@ -164,9 +196,24 @@ export function App() {
         },
       playerNames: prefs.playerNames,
       player1Symbol: prefs.player1Symbol,
+      mode: prefs.lastMode ?? { type: 'local' },
     }),
     [prefs],
   );
+
+  // Rótulo do adversário no modo bot, sensível ao idioma.
+  const displayNames: [string, string] | null = match
+    ? match.mode.type === 'bot'
+      ? [
+          match.playerNames[0],
+          `${msgs.botName} (${
+            { easy: msgs.diffEasy, medium: msgs.diffMedium, hard: msgs.diffHard }[
+              match.mode.difficulty
+            ]
+          })`,
+        ]
+      : match.playerNames
+    : null;
 
   return (
     <div className="app">
@@ -217,10 +264,10 @@ export function App() {
         <GameScreen
           msgs={msgs}
           state={match.state}
-          playerNames={match.playerNames}
+          playerNames={displayNames ?? match.playerNames}
           player1Symbol={match.player1Symbol}
           score={match.score}
-          onMove={handleMove}
+          onMove={handleHumanMove}
           onUndo={handleUndo}
           onRematch={handleRematch}
           onChangeSettings={() => {
