@@ -99,6 +99,14 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
   }
   const libraryIdRef = useRef<string | null>(null);
   const prevResultRef = useRef<SessionSnapshot['state']['result']>(null);
+  // RN-CONEXAO-08: um pedido de desfazer só pode ser aceito enquanto nenhuma
+  // jogada nova aconteceu depois dele, senão o aceite faria um rollback maior
+  // do que o esperado. movesLenRef acompanha o total de jogadas a cada
+  // mudança de estado; undoAskMovesRef guarda quantas havia quando o pedido
+  // chegou, pra o aviso sumir sozinho se esse número mudar antes de alguém
+  // decidir.
+  const movesLenRef = useRef(0);
+  const undoAskMovesRef = useRef<number | null>(null);
 
   function snapshotEntry(snap: SessionSnapshot): LibraryEntry {
     const other: 'X' | 'O' = snap.hostSymbol === 'X' ? 'O' : 'X';
@@ -171,6 +179,14 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
                 if (snap.phase === 'playing') setStage('playing');
                 // Toda mudança de estado real limpa avisos transitórios.
                 setUndoSent(false);
+                // RN-CONEXAO-08: jogada nova depois do pedido invalida o
+                // pedido de desfazer em aberto (o pedido ficaria desatualizado
+                // e aceitá-lo desfaria jogadas que já não fazem parte dele).
+                if (undoAskMovesRef.current !== null && snap.state.moves.length !== undoAskMovesRef.current) {
+                  undoAskMovesRef.current = null;
+                  setUndoAsk(null);
+                }
+                movesLenRef.current = snap.state.moves.length;
                 if (snap.state.moves.length === 0 && snap.state.result === null) {
                   setRematchAsk(false);
                   setRematchSent(false);
@@ -209,7 +225,10 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
                   saveOnline(savedRef.current);
                 }
               },
-              onUndoRequested: (toSeq) => setUndoAsk(toSeq),
+              onUndoRequested: (toSeq) => {
+                undoAskMovesRef.current = movesLenRef.current;
+                setUndoAsk(toSeq);
+              },
               onUndoDenied: () => {
                 setUndoSent(false);
                 setUndoDenied(true);
@@ -464,7 +483,12 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
       )}
 
       {undoAsk !== null && (
-        <div className="card online-banner" data-testid="undo-dialog">
+        // Fixo no topo, não um banner solto rolado lá embaixo: precisa ser
+        // impossível de perder de vista. Não bloqueia o tabuleiro por trás
+        // de propósito (sem backdrop cobrindo a tela) porque o adversário
+        // pode continuar jogando enquanto decide, e se jogar o pedido some
+        // sozinho (RN-CONEXAO-08), não trava a partida esperando resposta.
+        <div className="card undo-alert" role="alert" data-testid="undo-dialog">
           <p>{msgs.undoAsk}</p>
           <div className="controls">
             <button
@@ -473,6 +497,7 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
               data-testid="undo-accept"
               onClick={() => {
                 session?.respondUndo(undoAsk, true);
+                undoAskMovesRef.current = null;
                 setUndoAsk(null);
               }}
             >
@@ -483,6 +508,7 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
               data-testid="undo-reject"
               onClick={() => {
                 session?.respondUndo(undoAsk, false);
+                undoAskMovesRef.current = null;
                 setUndoAsk(null);
               }}
             >

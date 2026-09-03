@@ -116,7 +116,10 @@ h3 {
 }
 
 /* Barrinha deslizante genérica, reaproveitada por qualquer liga/desliga
-   (tema, som): só o ícone muda por subclasse. */
+   (tema, som): só o ícone muda por subclasse. O checkbox "comum" (variante
+   de limpeza) tem sua própria classe (.checkbox-plain) em vez de estilizar
+   por [type='checkbox'], assim os dois nunca competem em especificidade
+   nem dependem de que regra vem depois no arquivo. */
 .switch input {
   appearance: none;
   width: 54px;
@@ -221,11 +224,13 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
-/* Checkbox: excluída da altura mínima e do raio de controle de linha única
-   (isso a esticava numa pílula alta e estreita, appearance:none some com o
-   quadradinho nativo e não sobra nada no lugar). Vira um quadrado pequeno
-   com marca de visto, do mesmo jeito de traço do resto da interface. */
-input[type='checkbox'] {
+/* Checkbox comum (ex.: variante de limpeza): excluída da altura mínima e
+   do raio de controle de linha única (isso a esticava numa pílula alta e
+   estreita, appearance:none some com o quadradinho nativo e não sobra
+   nada no lugar). Vira um quadrado pequeno com marca de visto. Classe
+   própria (não [type='checkbox']) pra nunca competir com .switch, que
+   também é um checkbox por baixo, só que estilizado como barrinha. */
+.checkbox-plain {
   appearance: none;
   -webkit-appearance: none;
   width: 1.3rem;
@@ -241,12 +246,12 @@ input[type='checkbox'] {
   cursor: pointer;
 }
 
-input[type='checkbox']:checked {
+.checkbox-plain:checked {
   background: color-mix(in srgb, var(--accent) 25%, var(--card-bg));
   border-color: var(--accent);
 }
 
-input[type='checkbox']:checked::after {
+.checkbox-plain:checked::after {
   content: '✓';
   position: absolute;
   inset: 0;
@@ -691,6 +696,24 @@ input[type='checkbox']:checked::after {
   font-weight: 700;
   letter-spacing: 0.3em;
   margin: 0.3rem 0;
+}
+
+/* Pedido de desfazer: fixo no topo da tela, acima de tudo, mas sem
+   backdrop (o tabuleiro por trás continua clicável de propósito, ver
+   OnlineGame.tsx). Fundo opaco e destacado com a cor de destaque pra não
+   se confundir com um toast comum. */
+.undo-alert {
+  position: fixed;
+  top: 0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  background: var(--bg);
+  border-color: var(--accent);
+  border-width: 3px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  max-width: min(92vw, 420px);
+  text-align: center;
 }
 
 .host-code-actions {

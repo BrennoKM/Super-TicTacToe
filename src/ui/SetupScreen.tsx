@@ -303,6 +303,7 @@ export function SetupScreen({ msgs, initial, initialJoinCode, onStart, onStartOn
       <label className="check">
         <input
           type="checkbox"
+          className="checkbox-plain"
           checked={clearVariant}
           onChange={(e) => setClearVariant(e.target.checked)}
           data-testid="clear-variant"

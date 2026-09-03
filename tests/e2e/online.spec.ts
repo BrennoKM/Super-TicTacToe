@@ -78,6 +78,36 @@ test('desfazer no p2p exige consentimento; recusa mantém tudo (AC-STT-09)', asy
   await expect(guest.getByTestId('cell-4.0')).toHaveText('');
 });
 
+// RN-CONEXAO-08: jogada nova depois do pedido de desfazer invalida o
+// pedido, o aviso não pode continuar aceitável senão o aceite faz um
+// rollback maior do que o esperado.
+test('jogada nova depois do pedido de desfazer invalida o pedido (RN-CONEXAO-08)', async ({ context }) => {
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  const code = await createRoom(host, 'Ana');
+  await joinRoom(guest, code, 'Bia');
+  await expect(host.getByTestId('status')).toContainText('Ana', { timeout: 5000 });
+
+  // Host joga; agora é a vez do guest, e o host pede pra desfazer aquela jogada.
+  await host.getByTestId('cell-4.0').click();
+  await expect(guest.getByTestId('cell-4.0')).toHaveText('X');
+  await host.getByTestId('undo').click();
+  await expect(guest.getByTestId('undo-dialog')).toBeVisible();
+
+  // Antes de responder, o guest joga (é a vez dele mesmo com o pedido em aberto).
+  await guest.getByTestId('cell-0.4').click();
+  await expect(host.getByTestId('cell-0.4')).toHaveText('O');
+
+  // O aviso some sozinho: aceitar agora faria um rollback maior do que o pedido original.
+  await expect(guest.getByTestId('undo-dialog')).toBeHidden();
+
+  // As duas jogadas continuam de pé nos dois lados.
+  await expect(host.getByTestId('cell-4.0')).toHaveText('X');
+  await expect(host.getByTestId('cell-0.4')).toHaveText('O');
+  await expect(guest.getByTestId('cell-4.0')).toHaveText('X');
+  await expect(guest.getByTestId('cell-0.4')).toHaveText('O');
+});
+
 test('reconexão: recarregar no meio da partida retoma do ponto exato (AC-STT-11)', async ({ context }) => {
   const host = await context.newPage();
   const guest = await context.newPage();
