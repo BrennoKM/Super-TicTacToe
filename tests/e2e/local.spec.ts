@@ -40,6 +40,24 @@ test('desfazer volta a última jogada (REQ-STT-07)', async ({ page }) => {
   await expect(page.getByTestId('status')).toContainText('Ana');
 });
 
+test('sair da partida em andamento com confirmação (AC-CONEXAO-05, 06)', async ({ page }) => {
+  await startGame(page);
+  await page.getByTestId('cell-4.0').click();
+
+  // Cancelar mantém a partida exatamente como estava.
+  await page.getByTestId('leave-match').click();
+  await page.getByTestId('leave-cancel').click();
+  await expect(page.getByTestId('cell-4.0')).toHaveText('X');
+
+  // Confirmar volta pra configuração e não deixa partida pendente.
+  await page.getByTestId('leave-match').click();
+  await page.getByTestId('leave-confirm').click();
+  await expect(page.getByTestId('start')).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('start')).toBeVisible();
+  await expect(page.getByTestId('resume-dialog')).toBeHidden();
+});
+
 test('histórico registra as jogadas (REQ-STT-10)', async ({ page }) => {
   await startGame(page);
   await page.getByTestId('cell-4.0').click();

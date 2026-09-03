@@ -104,13 +104,64 @@ test('reconexão: recarregar no meio da partida retoma do ponto exato (AC-STT-11
   await expect(guest.getByTestId('cell-4.1')).toHaveText('X');
 });
 
-test('encerrar a sala avisa o adversário', async ({ context }) => {
+test('encerrar a sala avisa o adversário (RN-CONEXAO-02, AC-CONEXAO-07)', async ({ context }) => {
   const host = await context.newPage();
   const guest = await context.newPage();
   const code = await createRoom(host, 'Ana');
   await joinRoom(guest, code, 'Bia');
   await expect(host.getByTestId('status')).toContainText('Ana', { timeout: 5000 });
 
+  // Partida em andamento pede confirmação (AC-CONEXAO-06).
   await guest.getByTestId('end-match').first().click();
+  await expect(guest.getByTestId('leave-dialog')).toBeVisible();
+  await guest.getByTestId('leave-cancel').click();
+  await expect(guest.getByTestId('leave-dialog')).toBeHidden();
+  await expect(host.getByTestId('status')).toBeVisible();
+
+  await guest.getByTestId('end-match').first().click();
+  await guest.getByTestId('leave-confirm').click();
   await expect(host.getByTestId('online-ended')).toBeVisible();
+});
+
+test('sala abandonada não aceita mais ninguém (AC-CONEXAO-01)', async ({ context }) => {
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  const code = await createRoom(host, 'Ana');
+
+  // O criador desiste antes de alguém entrar.
+  await host.getByRole('button', { name: /Voltar|Back/ }).click();
+  await expect(host.getByTestId('start')).toBeVisible();
+
+  // Quem tenta entrar recebe erro, em vez de conectar numa sala fantasma.
+  await joinRoom(guest, code, 'Bia');
+  await expect(guest.getByTestId('online-error')).toBeVisible({ timeout: 10_000 });
+});
+
+test('criar sala de novo após sair funciona (AC-CONEXAO-02)', async ({ context }) => {
+  const host = await context.newPage();
+  const first = await createRoom(host, 'Ana');
+  await host.getByRole('button', { name: /Voltar|Back/ }).click();
+  await expect(host.getByTestId('start')).toBeVisible();
+
+  await host.getByTestId('mode').selectOption('online');
+  await host.getByTestId('start').click();
+  await expect(host.getByTestId('online-waiting')).toBeVisible();
+  const second = (await host.getByTestId('room-code').first().innerText()).trim();
+  expect(second).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+  expect(second).not.toBe('');
+  void first;
+});
+
+test('entrar em código inexistente falha com saída, sem travar (AC-CONEXAO-03, RN-CONEXAO-05)', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('stt.transport', 'broadcast'));
+  await page.goto('/');
+  await page.getByTestId('mode').selectOption('online');
+  await page.getByTestId('online-action').selectOption('join');
+  await page.getByTestId('join-code').fill('ZZZZZZ');
+  await page.getByTestId('start').click();
+
+  await expect(page.getByTestId('online-error')).toBeVisible({ timeout: 10_000 });
+  // Sempre há saída da tela de erro.
+  await page.getByRole('button', { name: /Voltar|Back/ }).click();
+  await expect(page.getByTestId('start')).toBeVisible();
 });
