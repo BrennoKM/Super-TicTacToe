@@ -7,7 +7,7 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   test: {
-    include: ['tests/engine/**/*.test.ts'],
+    include: ['tests/engine/**/*.test.ts', 'tests/p2p/**/*.test.ts'],
     environment: 'node',
     globals: true,
   },
