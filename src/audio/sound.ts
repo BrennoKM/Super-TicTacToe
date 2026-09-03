@@ -17,6 +17,18 @@ export function isMuted(): boolean {
   return muted;
 }
 
+// Descarta o contexto atual. Serve para o áudio se recuperar de um contexto
+// morto e para medir os sons num contexto offline durante a verificação.
+export function resetAudio(): void {
+  try {
+    void context?.close();
+  } catch {
+    // contexto já encerrado
+  }
+  context = null;
+  noise = null;
+}
+
 // RN-SOM-04: falha de áudio nunca atrapalha o jogo.
 function ensureContext(): AudioContext | null {
   if (muted) return null;
@@ -47,13 +59,15 @@ function noiseBuffer(ctx: AudioContext): AudioBuffer {
 interface ScratchOptions {
   duration: number; // segundos
   gain: number;
-  // Caneta e lápis: passa-baixa, ataque suave, cauda seca.
-  // Giz: passa-banda alto com modulação rápida, que dá o granulado do quadro.
+  // Caneta e lápis: banda média, fricção mais fechada e regular.
+  // Giz: banda mais alta e áspera, com fricção mais irregular.
   theme: Theme;
   startAt?: number;
 }
 
-// Um risco: ruído filtrado com envelope e, no giz, tremulação de amplitude.
+// Um risco de escrita é ruído sustentado com atrito irregular, não um estalo.
+// Por isso o ganho vem de uma curva com granulado aleatório (fricção) em vez
+// de rampa simples, e a banda do filtro varre enquanto o traço "anda".
 function scratch(ctx: AudioContext, options: ScratchOptions): void {
   const { duration, gain, theme } = options;
   const start = ctx.currentTime + (options.startAt ?? 0);
@@ -62,43 +76,43 @@ function scratch(ctx: AudioContext, options: ScratchOptions): void {
   const source = ctx.createBufferSource();
   source.buffer = noiseBuffer(ctx);
   source.loop = true;
-  // Pequena variação a cada jogada, pra não soar mecânico.
-  const drift = 0.9 + Math.random() * 0.25;
-  source.playbackRate.value = drift;
+  source.loopStart = Math.random();
+  source.loopEnd = source.loopStart + 0.4;
+  source.playbackRate.value = 0.85 + Math.random() * 0.3;
 
-  const filter = ctx.createBiquadFilter();
-  if (chalk) {
-    filter.type = 'bandpass';
-    filter.frequency.value = 2600 * drift;
-    filter.Q.value = 1.4;
-  } else {
-    filter.type = 'lowpass';
-    filter.frequency.value = 1500 * drift;
-    filter.Q.value = 0.8;
+  // Tira o peso grave, que é o que dava sensação de batida.
+  const highpass = ctx.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = chalk ? 1100 : 650;
+
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  const from = (chalk ? 3200 : 1900) * (0.9 + Math.random() * 0.2);
+  const to = (chalk ? 2100 : 1150) * (0.9 + Math.random() * 0.2);
+  band.frequency.setValueAtTime(from, start);
+  band.frequency.linearRampToValueAtTime(to, start + duration);
+  band.Q.value = chalk ? 1.1 : 0.7;
+
+  // Envelope com fricção: ataque suave o bastante pra não estalar, corpo
+  // sustentado e granulado aleatório por cima (o arrastar do traço).
+  const steps = Math.max(24, Math.round(duration * 320));
+  const curve = new Float32Array(steps);
+  const grit = chalk ? 0.55 : 0.32;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const attack = Math.min(1, t / 0.14);
+    const decay = Math.pow(1 - t, chalk ? 0.9 : 1.3);
+    const friction = 1 - grit + grit * Math.random();
+    curve[i] = gain * attack * decay * friction;
   }
+  curve[steps - 1] = 0;
 
   const envelope = ctx.createGain();
-  const peak = gain * (chalk ? 0.9 : 0.75);
-  envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(peak, start + (chalk ? 0.006 : 0.012));
-  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  envelope.gain.setValueCurveAtTime(curve, start, duration);
 
-  source.connect(filter).connect(envelope).connect(ctx.destination);
-
-  // Granulado do giz: modulação rápida de amplitude sobre o envelope.
-  if (chalk) {
-    const grain = ctx.createOscillator();
-    grain.type = 'square';
-    grain.frequency.value = 55 + Math.random() * 35;
-    const grainGain = ctx.createGain();
-    grainGain.gain.value = 0.35;
-    grain.connect(grainGain).connect(envelope.gain);
-    grain.start(start);
-    grain.stop(start + duration + 0.05);
-  }
-
+  source.connect(highpass).connect(band).connect(envelope).connect(ctx.destination);
   source.start(start);
-  source.stop(start + duration + 0.05);
+  source.stop(start + duration + 0.03);
 }
 
 // REQ-SOM-02: X são dois riscos rápidos; O é um traço único mais longo.
@@ -107,10 +121,10 @@ export function playMark(mark: Mark, theme: Theme): void {
   if (ctx === null) return;
   try {
     if (mark === 'X') {
-      scratch(ctx, { duration: 0.1, gain: 0.32, theme });
-      scratch(ctx, { duration: 0.1, gain: 0.3, theme, startAt: 0.085 });
+      scratch(ctx, { duration: 0.15, gain: 0.3, theme });
+      scratch(ctx, { duration: 0.15, gain: 0.28, theme, startAt: 0.13 });
     } else {
-      scratch(ctx, { duration: 0.26, gain: 0.28, theme });
+      scratch(ctx, { duration: 0.34, gain: 0.26, theme });
     }
   } catch {
     // áudio indisponível: segue em silêncio
@@ -123,8 +137,8 @@ export function playStrike(scale: StrikeScale, theme: Theme): void {
   if (ctx === null) return;
   try {
     scratch(ctx, {
-      duration: scale === 'big' ? 0.62 : 0.34,
-      gain: scale === 'big' ? 0.42 : 0.34,
+      duration: scale === 'big' ? 0.85 : 0.45,
+      gain: scale === 'big' ? 0.4 : 0.32,
       theme,
     });
   } catch {
