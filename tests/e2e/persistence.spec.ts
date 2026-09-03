@@ -51,6 +51,16 @@ test('nomes dos jogadores persistem como preferência (REQ-STT-13)', async ({ pa
   await expect(page.getByTestId('name-2')).toHaveValue('Bia');
 });
 
+test('silenciar persiste entre sessões (REQ-SOM-04, AC-SOM-04)', async ({ page }) => {
+  await page.goto('/');
+  const toggle = page.getByTestId('mute-toggle');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await expect(page.getByTestId('mute-toggle')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('alternância de tema persiste', async ({ page }) => {
   await page.goto('/');
   const initial = await page.evaluate(() => document.documentElement.dataset.theme);

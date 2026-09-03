@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameConfig, Path, Player } from '../engine';
 import type { Messages } from '../i18n';
+import { soundsForTransition } from '../audio/events';
+import { playMark, playStrike } from '../audio/sound';
 import { generateRoomCode } from '../p2p/protocol';
 import { P2PSession } from '../p2p/session';
 import type { SessionSnapshot } from '../p2p/session';
@@ -27,6 +29,7 @@ export interface OnlineInit {
 interface OnlineGameProps {
   msgs: Messages;
   init: OnlineInit;
+  theme: 'light' | 'dark';
   onExit: () => void;
 }
 
@@ -39,7 +42,7 @@ const RECONNECT_DELAYS_MS = [4000, 8000, 16_000, 32_000, 60_000];
 // Erro local de tempo esgotado, somado aos erros do transporte.
 type OnlineError = TransportError | { kind: 'tempo-esgotado' };
 
-export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
+export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
   const [code, setCode] = useState(init.code);
   const [stage, setStage] = useState<Stage>('connecting');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
@@ -56,6 +59,8 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
   const attemptRef = useRef<TransportAttempt | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTriesRef = useRef(0);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const [replayOpen, setReplayOpen] = useState(false);
   const [leaveAsk, setLeaveAsk] = useState(false);
   const libraryIdRef = useRef<string | null>(null);
@@ -122,7 +127,15 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
                 },
             {
               onChange: (snap) => {
-                setSnapshot(snap);
+                // REQ-SOM-05: a jogada que chega do adversário também soa.
+                setSnapshot((prev) => {
+                  if (prev !== null) {
+                    const sounds = soundsForTransition(prev.state, snap.state);
+                    if (sounds.mark !== null) playMark(sounds.mark, themeRef.current);
+                    for (const scale of sounds.strikes) playStrike(scale, themeRef.current);
+                  }
+                  return snap;
+                });
                 if (snap.phase === 'playing') setStage('playing');
                 // Toda mudança de estado real limpa avisos transitórios.
                 setUndoSent(false);
@@ -314,6 +327,7 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
       <ReplayScreen
         msgs={msgs}
         entry={snapshotEntry(snapshot)}
+        theme={theme}
         onBack={() => setReplayOpen(false)}
       />
     );
@@ -354,7 +368,7 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
         }}
         onChangeSettings={endMatch}
         onOpenReplay={() => setReplayOpen(true)}
-        onDownloadGif={() => downloadEntryGif(snapshotEntry(snapshot))}
+        onDownloadGif={() => void downloadEntryGif(snapshotEntry(snapshot))}
       />
 
       <div className="online-footer controls">

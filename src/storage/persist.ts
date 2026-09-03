@@ -19,6 +19,7 @@ export interface Preferences {
   player1Symbol: Player;
   lastConfig: GameConfig | null;
   lastMode: MatchMode | null;
+  muted: boolean;
 }
 
 export interface SessionScore {
@@ -58,6 +59,7 @@ const defaultPreferences: Preferences = {
   player1Symbol: 'X',
   lastConfig: null,
   lastMode: null,
+  muted: false,
 };
 
 function read<T>(key: string): T | null {

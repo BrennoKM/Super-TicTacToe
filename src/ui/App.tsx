@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { soundsForTransition } from '../audio/events';
+import { playMark, playStrike, setMuted } from '../audio/sound';
 import { chooseMove } from '../bot/bot';
 import { applyMove, createGame, otherPlayer, replay, serialize, undo } from '../engine';
 import type { GameState, Path, Player } from '../engine';
@@ -60,6 +62,10 @@ export function App() {
   const theme = prefs.theme === 'system' ? systemTheme() : prefs.theme;
 
   useEffect(() => {
+    setMuted(prefs.muted);
+  }, [prefs.muted]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.lang = language === 'pt' ? 'pt-BR' : 'en';
   }, [theme, language]);
@@ -111,6 +117,13 @@ export function App() {
     });
   }
 
+  // REQ-SOM-01, 05, 09: toda marca que aparece no tabuleiro soa, venha de quem vier.
+  function playTransition(before: GameState, after: GameState) {
+    const sounds = soundsForTransition(before, after);
+    if (sounds.mark !== null) playMark(sounds.mark, theme);
+    for (const scale of sounds.strikes) playStrike(scale, theme);
+  }
+
   // Nomes de exibição por símbolo, resolvidos no momento do salvamento.
   function namesBySymbol(m: Match): Record<Player, string> {
     const p1 = m.playerNames[0] || msgs.player1;
@@ -143,6 +156,7 @@ export function App() {
     } catch {
       return; // REQ-STT-02: jogada inválida não altera nada
     }
+    playTransition(current.state, state);
     let { score, counted, libraryId } = current;
     if (state.result !== null && !counted) {
       score = { ...score };
@@ -287,6 +301,17 @@ export function App() {
               {msgs.library}
             </button>
           )}
+          <button
+            type="button"
+            className="ghost"
+            data-testid="mute-toggle"
+            aria-pressed={prefs.muted}
+            title={prefs.muted ? msgs.soundOff : msgs.soundOn}
+            aria-label={prefs.muted ? msgs.soundOff : msgs.soundOn}
+            onClick={() => updatePrefs({ muted: !prefs.muted })}
+          >
+            {prefs.muted ? '🔇' : '🔊'}
+          </button>
           <label
             className="theme-switch"
             title={`${msgs.theme}: ${theme === 'dark' ? msgs.themeDark : msgs.themeLight}`}
@@ -312,7 +337,7 @@ export function App() {
       </header>
 
       {replayEntry !== null && (
-        <ReplayScreen msgs={msgs} entry={replayEntry} onBack={() => setReplayEntry(null)} />
+        <ReplayScreen msgs={msgs} entry={replayEntry} theme={theme} onBack={() => setReplayEntry(null)} />
       )}
 
       {replayEntry === null && libraryOpen && !online && (
@@ -328,6 +353,7 @@ export function App() {
         <OnlineGame
           msgs={msgs}
           init={online}
+          theme={theme}
           onExit={() => {
             setOnline(null);
             setPendingOnline(null);
@@ -428,7 +454,7 @@ export function App() {
             })
           }
           onDownloadGif={() =>
-            downloadEntryGif({
+            void downloadEntryGif({
               id: match.libraryId ?? 'atual',
               finishedAt: Date.now(),
               ...matchEntry(match, match.state),
