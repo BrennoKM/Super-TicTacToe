@@ -224,18 +224,28 @@ export function App() {
 
   return (
     <div className="app">
+      {/* Filtro que dá o tremor de traço à mão ao tabuleiro (caneta/giz). */}
+      <svg width="0" height="0" aria-hidden style={{ position: 'absolute' }}>
+        <filter id="squiggle">
+          <feTurbulence baseFrequency="0.02" numOctaves="3" seed="2" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" />
+        </filter>
+      </svg>
       <header>
         <h1>{msgs.appTitle}</h1>
         <div className="header-controls">
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => updatePrefs({ theme: theme === 'dark' ? 'light' : 'dark' })}
-            data-testid="theme-toggle"
-            title={msgs.theme}
+          <label
+            className="theme-switch"
+            title={`${msgs.theme}: ${theme === 'dark' ? msgs.themeDark : msgs.themeLight}`}
           >
-            {theme === 'dark' ? msgs.themeLight : msgs.themeDark}
-          </button>
+            <input
+              type="checkbox"
+              data-testid="theme-toggle"
+              aria-label={msgs.theme}
+              checked={theme === 'dark'}
+              onChange={(e) => updatePrefs({ theme: e.target.checked ? 'dark' : 'light' })}
+            />
+          </label>
           <select
             value={language}
             onChange={(e) => updatePrefs({ language: e.target.value as Language })}

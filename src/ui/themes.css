@@ -9,32 +9,26 @@
   color-scheme: light;
   --bg: #faf6ec;
   --ruled-line: rgba(116, 160, 204, 0.35);
-  --margin-line: rgba(214, 116, 116, 0.4);
   --ink: #22335c;
   --ink-soft: #56679b;
   --line: #22335c;
+  --line-soft: rgba(34, 51, 92, 0.4);
   --card-bg: rgba(255, 255, 255, 0.55);
   --mark-x: #c0392b;
   --mark-o: #1f5fa8;
-  --playable: rgba(255, 214, 90, 0.35);
-  --playable-border: #d4a017;
-  --disabled: rgba(34, 51, 92, 0.08);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
   --bg: #2b3b34;
   --ruled-line: rgba(255, 255, 255, 0.05);
-  --margin-line: rgba(255, 255, 255, 0.08);
   --ink: #f0eee2;
   --ink-soft: #b8c4b4;
   --line: #e8e6d8;
+  --line-soft: rgba(232, 230, 216, 0.45);
   --card-bg: rgba(255, 255, 255, 0.06);
   --mark-x: #ffd77a;
   --mark-o: #9fd8ff;
-  --playable: rgba(255, 255, 255, 0.12);
-  --playable-border: #ffd77a;
-  --disabled: rgba(0, 0, 0, 0.25);
 }
 
 * {
@@ -87,6 +81,37 @@ h3 {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+/* Toggle claro/escuro: desligado = caderno (sol), ligado = lousa (lua). */
+
+.theme-switch input {
+  appearance: none;
+  width: 54px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--card-bg);
+  position: relative;
+  cursor: pointer;
+}
+
+.theme-switch input::after {
+  content: '☀️';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  translate: 0 -50%;
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.theme-switch input:checked::after {
+  content: '🌙';
+  transform: translateX(25px);
 }
 
 button,
@@ -184,35 +209,38 @@ button.ghost {
   min-height: 1.6em;
 }
 
+/* O tabuleiro é uma grade única desenhada com traços, como no papel:
+   linhas grossas formam o jogo da velha grande, linhas finas os pequenos.
+   O filtro #squiggle (SVG no App) dá o tremor de caneta/giz. */
+
 .macro-board {
   position: relative;
   width: min(92vw, 560px);
+  filter: url(#squiggle);
 }
 
 .macro-board > .board-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
 }
 
 .mini-board {
   position: relative;
-  border: 3px solid var(--line);
-  border-radius: 10px 3px 12px 4px;
-  padding: 4px;
-  background: var(--disabled);
+  padding: 7px;
 }
 
-.mini-board.playable {
-  background: var(--playable);
-  border-color: var(--playable-border);
-  box-shadow: 0 0 0 2px var(--playable-border);
+.macro-board > .board-grid > .mini-board:not(:nth-child(3n)) {
+  border-right: 5px solid var(--line);
+}
+
+.macro-board > .board-grid > .mini-board:nth-child(-n + 6) {
+  border-bottom: 5px solid var(--line);
 }
 
 .mini-board > .board-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+  gap: 0;
 }
 
 .cell {
@@ -220,12 +248,25 @@ button.ghost {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(0.9rem, 3.4vw, 1.5rem);
+  font-size: clamp(0.95rem, 3.6vw, 1.6rem);
   font-weight: bold;
   padding: 0;
-  border-width: 1px;
-  border-radius: 8px 3px 9px 4px;
+  border: none;
+  border-radius: 0;
   background: transparent;
+}
+
+.mini-board .cell:not(:nth-child(3n)) {
+  border-right: 2px solid var(--line-soft);
+}
+
+.mini-board .cell:nth-child(-n + 6) {
+  border-bottom: 2px solid var(--line-soft);
+}
+
+.cell:hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--turn-color, var(--ink)) 10%, transparent);
 }
 
 .cell:disabled {
@@ -233,11 +274,28 @@ button.ghost {
 }
 
 .cell.last-move {
-  outline: 2px dashed var(--playable-border);
+  outline: 2px dashed currentColor;
+  outline-offset: -4px;
+}
+
+/* Destaque de onde se pode jogar, na cor de quem está na vez (turn-X/turn-O). */
+
+.turn-X {
+  --turn-color: var(--mark-x);
+}
+
+.turn-O {
+  --turn-color: var(--mark-o);
+}
+
+.mini-board.playable {
+  background: color-mix(in srgb, var(--turn-color) 11%, transparent);
+  outline: 2px dashed var(--turn-color);
+  outline-offset: -5px;
 }
 
 .decided > .board-grid {
-  opacity: 0.25;
+  opacity: 0.16;
 }
 
 .board-result {

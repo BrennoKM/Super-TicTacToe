@@ -39,7 +39,8 @@ export function GameScreen(props: GameScreenProps) {
   const lastMove = state.moves.at(-1)?.path ?? null;
 
   return (
-    <section className="game">
+    // A classe turn-X/turn-O tinge o destaque de jogável na cor de quem joga.
+    <section className={`game turn-${state.currentPlayer}`}>
       <div className="status" data-testid="status">
         {state.result === null ? (
           <>
