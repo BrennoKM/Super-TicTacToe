@@ -129,9 +129,11 @@ function drawStrikes(
   width: number,
   jitter: Jitter,
   key: number,
+  alpha = 1,
 ): void {
   const lines = winningLines(board, tiebreak);
   if (lines.length === 0) return;
+  ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.lineCap = 'round';
@@ -158,6 +160,7 @@ function drawStrikes(
       key + i * 17,
     );
   });
+  ctx.globalAlpha = 1;
 }
 
 export function drawState(
@@ -200,8 +203,9 @@ export function drawState(
     const decided = resultOf(sub as Board, tiebreak);
     const struck = winningLines(sub as Board, tiebreak).length > 0;
 
-    // Mesmos pesos da tela: riscado mantém as marcas legíveis, decidido esmaece.
-    ctx.globalAlpha = struck ? 0.62 : decided !== null ? 0.3 : 1;
+    // Mesmos pesos da tela: no tabuleirinho conquistado a marca grande é a
+    // protagonista, com jogadas e risco de fundo.
+    ctx.globalAlpha = struck ? 0.4 : decided !== null ? 0.3 : 1;
     drawGrid(ctx, sx + inner, sy + inner, innerSize, 2, palette.lineSoft, jitter, b * 40 + 7);
     ctx.font = cellFont;
     for (let c = 0; c < 9; c++) {
@@ -217,7 +221,7 @@ export function drawState(
     ctx.globalAlpha = 1;
 
     if (decided !== null) {
-      ctx.globalAlpha = struck ? 0.3 : 0.75;
+      ctx.globalAlpha = struck ? 0.95 : 0.75;
       ctx.font = bigFont;
       ctx.fillStyle =
         decided === 'X' ? palette.x : decided === 'O' ? palette.o : palette.line;
@@ -236,6 +240,7 @@ export function drawState(
       Math.max(3, size * 0.008),
       jitter,
       b * 40 + 21,
+      0.45,
     );
   }
 

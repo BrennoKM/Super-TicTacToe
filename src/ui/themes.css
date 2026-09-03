@@ -246,6 +246,13 @@ button.ghost {
   position: relative;
   padding: 7px;
   --grid-inset: 7px;
+  /* A marca de conquista é dimensionada pelo tabuleirinho, não pela janela,
+     pra ficar igualmente grande no celular e no desktop. */
+  container-type: inline-size;
+}
+
+.mini-board > .board-result {
+  font-size: 68cqi;
 }
 
 /* Risco na linha vencedora (spec RISCO), sobreposto exatamente à grade. */
@@ -295,9 +302,9 @@ button.ghost {
   }
 }
 
-/* REQ-RISCO-08: a marca grande cede protagonismo ao risco. */
-.struck > .board-result {
-  opacity: 0.3;
+/* REQ-RISCO-08: no tabuleiro grande, o risco vem primeiro. */
+.macro-board.struck > .board-result {
+  opacity: 0.28;
 }
 
 .mini-board > .board-grid {
@@ -368,8 +375,22 @@ button.ghost {
   opacity: 0.3;
 }
 
-/* Tabuleiro riscado mantém as marcas visíveis sob o traço, como no papel. */
-.struck > .board-grid {
+/* Tabuleiro pequeno conquistado: a marca de quem fechou é a protagonista,
+   grande e nítida; o risco e as jogadas ficam de fundo. */
+.mini-board.struck > .board-grid {
+  opacity: 0.4;
+}
+
+.mini-board.struck > .strike-layer .strike {
+  opacity: 0.45;
+}
+
+.mini-board.struck > .board-result {
+  opacity: 0.95;
+}
+
+/* No tabuleiro grande é o contrário: o risco da vitória é o que se lê. */
+.macro-board.struck > .board-grid {
   opacity: 0.62;
 }
 
