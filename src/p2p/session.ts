@@ -48,6 +48,10 @@ export interface SessionInit {
   config?: GameConfig;
   hostSymbol?: Player;
   saved?: { config: GameConfig; hostSymbol: Player; moves: Move[]; score: SessionScore; names: [string, string] };
+  // Heartbeat (GAR-P2P-06): ping a cada heartbeatMs; sem tráfego por staleMs,
+  // a conexão é dada como caída. heartbeatMs 0 desliga (usado em testes).
+  heartbeatMs?: number;
+  staleMs?: number;
 }
 
 export class P2PSession {
@@ -64,6 +68,8 @@ export class P2PSession {
   private counted = false;
   private phase: SessionPhase = 'handshake';
   private pendingUndo: number | null = null; // toSeq do meu pedido em aberto
+  private lastSeen = Date.now();
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   constructor(transport: Transport, init: SessionInit, events: SessionEvents) {
     this.role = init.role;
@@ -89,6 +95,7 @@ export class P2PSession {
 
     transport.onMessage((raw) => this.receive(raw));
     transport.onClose(() => {
+      this.stopHeartbeat();
       // Fases terminais informativas (saída deliberada, versão) não são
       // rebaixadas pro genérico 'closed' quando o canal cai em seguida.
       if (this.phase !== 'peer-left' && this.phase !== 'version-mismatch') {
@@ -96,6 +103,23 @@ export class P2PSession {
       }
     });
     this.send({ t: 'hello', v: PROTOCOL_VERSION, name: this.myName });
+
+    // GAR-P2P-06: rede que congela sem fechar o canal também é detectada.
+    const heartbeatMs = init.heartbeatMs ?? 5000;
+    const staleMs = init.staleMs ?? 12_000;
+    if (heartbeatMs > 0) {
+      this.heartbeat = setInterval(() => {
+        if (Date.now() - this.lastSeen > staleMs) {
+          this.stopHeartbeat();
+          this.transport.close();
+          if (this.phase !== 'peer-left' && this.phase !== 'version-mismatch') {
+            this.setPhase('closed');
+          }
+          return;
+        }
+        this.send({ t: 'ping' });
+      }, heartbeatMs);
+    }
   }
 
   // -- API pra UI ------------------------------------------------------------
@@ -153,17 +177,30 @@ export class P2PSession {
   }
 
   leave(): void {
+    this.stopHeartbeat();
     this.send({ t: 'leave' });
     this.transport.close();
     this.setPhase('closed');
   }
 
+  private stopHeartbeat(): void {
+    if (this.heartbeat !== null) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
+  }
+
   // -- Recebimento -----------------------------------------------------------
 
   private receive(raw: string): void {
+    this.lastSeen = Date.now();
     const msg = decodeMessage(raw);
     if (msg === null) return; // CL-P2P-06
     switch (msg.t) {
+      case 'ping':
+        return this.send({ t: 'pong' });
+      case 'pong':
+        return; // lastSeen já foi atualizado
       case 'hello':
         return this.onHello(msg);
       case 'config':

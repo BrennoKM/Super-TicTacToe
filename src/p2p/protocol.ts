@@ -28,6 +28,8 @@ export type P2PMessage =
   | { t: 'undoRes'; toSeq: number; ok: boolean }
   | { t: 'rematch' }
   | { t: 'rematchOk' }
+  | { t: 'ping' }
+  | { t: 'pong' }
   | { t: 'leave' };
 
 export type MessageType = P2PMessage['t'];
@@ -42,6 +44,8 @@ const KNOWN_TYPES: MessageType[] = [
   'undoRes',
   'rematch',
   'rematchOk',
+  'ping',
+  'pong',
   'leave',
 ];
 

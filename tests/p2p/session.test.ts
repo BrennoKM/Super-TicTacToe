@@ -41,10 +41,10 @@ function connectDuo(): Duo {
   const guestEvents = makeEvents();
   const host = new P2PSession(
     pair.a,
-    { role: 'host', myName: 'Ana', config: classic, hostSymbol: 'X' },
+    { role: 'host', myName: 'Ana', config: classic, hostSymbol: 'X', heartbeatMs: 0 },
     hostEvents,
   );
-  const guest = new P2PSession(pair.b, { role: 'guest', myName: 'Bia' }, guestEvents);
+  const guest = new P2PSession(pair.b, { role: 'guest', myName: 'Bia', heartbeatMs: 0 }, guestEvents);
   return { pair, host, guest, hostEvents, guestEvents };
 }
 
@@ -103,7 +103,7 @@ describe('handshake e partida (CL-P2P-03/04/05)', () => {
     const events = makeEvents();
     const host = new P2PSession(
       pair.a,
-      { role: 'host', myName: 'Ana', config: classic, hostSymbol: 'X' },
+      { role: 'host', myName: 'Ana', config: classic, hostSymbol: 'X', heartbeatMs: 0 },
       events,
     );
     pair.a.deliverTo(
@@ -181,12 +181,12 @@ describe('reconexão (GAR-P2P-05)', () => {
     const pair2 = createFakePair();
     const host2 = new P2PSession(
       pair2.a,
-      { role: 'host', myName: 'Ana', saved: hostSaved },
+      { role: 'host', myName: 'Ana', saved: hostSaved, heartbeatMs: 0 },
       makeEvents(),
     );
     const guest2 = new P2PSession(
       pair2.b,
-      { role: 'guest', myName: 'Bia', saved: guestSaved },
+      { role: 'guest', myName: 'Bia', saved: guestSaved, heartbeatMs: 0 },
       makeEvents(),
     );
 
@@ -236,6 +236,64 @@ describe('desfazer com consentimento (GAR-P2P-07)', () => {
     // Resposta tardia aceitando: não pode mais desfazer.
     pair.a.deliverTo(JSON.stringify({ t: 'undoRes', toSeq: 0, ok: true }));
     expect(host.snapshot().state.moves).toHaveLength(2);
+  });
+});
+
+describe('heartbeat (GAR-P2P-06)', () => {
+  it('rede congelada sem fechar o canal é detectada como queda', () => {
+    vi.useFakeTimers();
+    try {
+      // Par em modo manual: nada é entregue, o host fica falando sozinho.
+      const pair = createFakePair({ manual: true });
+      const host = new P2PSession(
+        pair.a,
+        {
+          role: 'host',
+          myName: 'Ana',
+          config: classic,
+          hostSymbol: 'X',
+          heartbeatMs: 1000,
+          staleMs: 3000,
+        },
+        makeEvents(),
+      );
+      expect(host.snapshot().phase).toBe('handshake');
+      vi.advanceTimersByTime(5000);
+      expect(host.snapshot().phase).toBe('closed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ping respondido com pong mantém a sessão viva', () => {
+    vi.useFakeTimers();
+    try {
+      const pair = createFakePair();
+      const host = new P2PSession(
+        pair.a,
+        {
+          role: 'host',
+          myName: 'Ana',
+          config: classic,
+          hostSymbol: 'X',
+          heartbeatMs: 1000,
+          staleMs: 3000,
+        },
+        makeEvents(),
+      );
+      // Guest sem heartbeat próprio: só responde aos pings do host.
+      const guest = new P2PSession(
+        pair.b,
+        { role: 'guest', myName: 'Bia', heartbeatMs: 0 },
+        makeEvents(),
+      );
+      vi.advanceTimersByTime(20_000);
+      expect(host.snapshot().phase).toBe('playing');
+      expect(guest.snapshot().phase).toBe('playing');
+      host.leave(); // encerra o interval
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
