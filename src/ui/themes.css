@@ -16,6 +16,10 @@
   --card-bg: rgba(255, 255, 255, 0.55);
   --mark-x: #c0392b;
   --mark-o: #1f5fa8;
+  /* Mesma duração que o som do risco (clipe ÷ velocidade de reprodução em
+     src/audio/sound.ts), pro traço desenhado acompanhar o traço ouvido. */
+  --strike-dur-small: 0.24s;
+  --strike-dur-big: 0.347s;
 }
 
 :root[data-theme='dark'] {
@@ -29,6 +33,8 @@
   --card-bg: rgba(255, 255, 255, 0.06);
   --mark-x: #ffd77a;
   --mark-o: #9fd8ff;
+  --strike-dur-small: 0.391s;
+  --strike-dur-big: 0.566s;
 }
 
 * {
@@ -283,11 +289,17 @@ button.ghost {
   color: var(--mark-o);
 }
 
-/* REQ-RISCO-04: o traço é desenhado de uma ponta à outra ao acontecer. */
+/* REQ-RISCO-04: o traço é desenhado de uma ponta à outra ao acontecer, na
+   mesma duração do som daquele risco (--strike-dur-small/big, calculadas a
+   partir do mesmo clipe ÷ velocidade que src/audio/sound.ts usa de verdade). */
 .strike-layer.animate .strike {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: risca 0.35s ease-out forwards;
+  animation: risca var(--strike-dur-small) ease-out forwards;
+}
+
+.macro-board > .strike-layer.animate .strike {
+  animation-duration: var(--strike-dur-big);
 }
 
 @keyframes risca {

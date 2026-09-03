@@ -60,6 +60,9 @@ const CLIP_DURATION_S: Record<Theme, number> = { light: 0.132, dark: 0.215 };
 // Velocidade de reprodução por evento: mais rápido e agudo pro toque curto do
 // X, mais devagar e grave pros riscos, como um gesto maior. A duração efetiva
 // (usada pra reservar vaga na fila) é a duração do clipe dividida pela taxa.
+// As taxas `small.base` e `big.base` também definem, via CLIP_DURATION_S,
+// quanto tempo a animação do traço do risco leva na tela (--strike-dur-small
+// e --strike-dur-big em themes.css): mudou a taxa aqui, recalcula lá.
 const RATE: Record<'x' | 'o' | 'small' | 'big', { base: number; jitter: number; gain: number }> = {
   x: { base: 0.97, jitter: 0.07, gain: 0.85 },
   o: { base: 0.82, jitter: 0.06, gain: 0.8 },

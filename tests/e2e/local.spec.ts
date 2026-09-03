@@ -81,7 +81,35 @@ test('risco na linha vencedora, pequeno e grande (AC-RISCO-01, 02, 06)', async (
 
   // Fim da partida: risco grande atravessando os três tabuleiros.
   for (const move of script.slice(5)) await page.getByTestId(`cell-${move}`).click();
-  await expect(page.getByTestId('board-root').locator('> .strike-layer .strike')).toHaveCount(1);
+  const bigStrike = page.getByTestId('board-root').locator('> .strike-layer .strike');
+  await expect(bigStrike).toHaveCount(1);
+});
+
+// A animação do traço dura o mesmo tempo que o som daquele risco
+// (--strike-dur-small/big em themes.css, calculadas a partir do mesmo clipe
+// e velocidade que src/audio/sound.ts usa de verdade).
+test('animação do risco dura o mesmo tempo que o som (grande mais longo que pequeno)', async ({ page }) => {
+  await startGame(page);
+  const script = [
+    '0.6', '6.0', '0.7', '7.0', '0.8', '8.1', '1.6', '6.1', '1.7', '7.1',
+    '1.8', '8.2', '2.6', '6.2', '2.7', '7.2', '2.8',
+  ];
+  for (const move of script.slice(0, 5)) await page.getByTestId(`cell-${move}`).click();
+  const smallDur = await page
+    .getByTestId('board-0')
+    .locator('.strike')
+    .first()
+    .evaluate((el) => getComputedStyle(el).animationDuration);
+
+  for (const move of script.slice(5)) await page.getByTestId(`cell-${move}`).click();
+  const bigDur = await page
+    .getByTestId('board-root')
+    .locator('> .strike-layer .strike')
+    .first()
+    .evaluate((el) => getComputedStyle(el).animationDuration);
+
+  expect(smallDur).toBe('0.24s');
+  expect(bigDur).toBe('0.347s');
 });
 
 test('histórico registra as jogadas (REQ-STT-10)', async ({ page }) => {
