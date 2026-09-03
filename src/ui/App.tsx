@@ -6,11 +6,16 @@ import { detectLanguage, messages } from '../i18n';
 import type { Language } from '../i18n';
 import {
   clearMatch,
+  clearOnline,
   loadMatch,
+  loadOnline,
   loadPreferences,
   saveMatch,
   savePreferences,
 } from '../storage/persist';
+import type { SavedOnline } from '../storage/persist';
+import { OnlineGame } from './OnlineGame';
+import type { OnlineInit } from './OnlineGame';
 import type { MatchMode, Preferences, SavedMatch, SessionScore } from '../storage/persist';
 import { GameScreen } from './GameScreen';
 import { SetupScreen } from './SetupScreen';
@@ -39,6 +44,8 @@ export function App() {
   const [prefs, setPrefs] = useState<Preferences>(() => loadPreferences());
   const [pendingResume, setPendingResume] = useState<SavedMatch | null>(() => loadMatch());
   const [match, setMatch] = useState<Match | null>(null);
+  const [online, setOnline] = useState<OnlineInit | null>(null);
+  const [pendingOnline, setPendingOnline] = useState<SavedOnline | null>(() => loadOnline());
 
   const language: Language = prefs.language ?? detectLanguage();
   const msgs = messages[language];
@@ -241,7 +248,54 @@ export function App() {
         </div>
       </header>
 
-      {pendingResume && (
+      {online && (
+        <OnlineGame
+          msgs={msgs}
+          init={online}
+          onExit={() => {
+            setOnline(null);
+            setPendingOnline(null);
+          }}
+        />
+      )}
+
+      {!online && pendingOnline && (
+        <div className="card resume" data-testid="online-resume-dialog">
+          <h2>{msgs.onlineResumeTitle}</h2>
+          <p>
+            {msgs.roomCode}: <strong>{pendingOnline.code}</strong>. {msgs.resumeQuestion}
+          </p>
+          <div className="controls">
+            <button
+              type="button"
+              className="primary"
+              data-testid="online-resume"
+              onClick={() => {
+                setOnline({
+                  role: pendingOnline.role,
+                  code: pendingOnline.code,
+                  myName: pendingOnline.myName,
+                  saved: pendingOnline,
+                });
+              }}
+            >
+              {msgs.resume}
+            </button>
+            <button
+              type="button"
+              data-testid="online-discard"
+              onClick={() => {
+                clearOnline(pendingOnline.code, pendingOnline.role);
+                setPendingOnline(null);
+              }}
+            >
+              {msgs.discard}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!online && !pendingOnline && pendingResume && (
         <div className="card resume" data-testid="resume-dialog">
           <h2>{msgs.resumeTitle}</h2>
           <p>{msgs.resumeQuestion}</p>
@@ -256,11 +310,23 @@ export function App() {
         </div>
       )}
 
-      {!pendingResume && match === null && (
-        <SetupScreen msgs={msgs} initial={initialSetup} onStart={startMatch} />
+      {!online && !pendingOnline && !pendingResume && match === null && (
+        <SetupScreen
+          msgs={msgs}
+          initial={initialSetup}
+          onStart={startMatch}
+          onStartOnline={(init) => {
+            updatePrefs({
+              playerNames: [init.myName, prefs.playerNames[1]],
+              ...(init.hostSymbol ? { player1Symbol: init.hostSymbol } : {}),
+              ...(init.config ? { lastConfig: init.config } : {}),
+            });
+            setOnline(init);
+          }}
+        />
       )}
 
-      {!pendingResume && match !== null && (
+      {!online && !pendingOnline && !pendingResume && match !== null && (
         <GameScreen
           msgs={msgs}
           state={match.state}

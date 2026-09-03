@@ -295,6 +295,38 @@ button.ghost {
   text-align: center;
 }
 
+/* Online */
+
+.online-status {
+  max-width: 420px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.room-code {
+  font-family: var(--font-title);
+  font-size: 2.4rem;
+  letter-spacing: 0.35em;
+  margin: 0.3rem 0;
+}
+
+.online-banner {
+  max-width: 480px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.online-footer {
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.toast {
+  text-align: center;
+  color: var(--ink-soft);
+  margin: 0.2rem 0;
+}
+
 @media (max-width: 480px) {
   body {
     font-size: 16px;
