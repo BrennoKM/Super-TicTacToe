@@ -58,6 +58,32 @@ test('sair da partida em andamento com confirmação (AC-CONEXAO-05, 06)', async
   await expect(page.getByTestId('resume-dialog')).toBeHidden();
 });
 
+test('risco na linha vencedora, pequeno e grande (AC-RISCO-01, 02, 06)', async ({ page }) => {
+  await startGame(page);
+  const script = [
+    '0.6', '6.0', '0.7', '7.0', '0.8', '8.1', '1.6', '6.1', '1.7', '7.1',
+    '1.8', '8.2', '2.6', '6.2', '2.7', '7.2', '2.8',
+  ];
+
+  // Antes de fechar qualquer linha, não há risco.
+  await expect(page.locator('.strike')).toHaveCount(0);
+
+  // Cinco jogadas fecham o tabuleiro 1: risco pequeno aparece.
+  for (const move of script.slice(0, 5)) await page.getByTestId(`cell-${move}`).click();
+  await expect(page.getByTestId('board-0').locator('.strike')).toHaveCount(1);
+  await expect(page.getByTestId('board-root').locator('> .strike-layer .strike')).toHaveCount(0);
+
+  // Desfazer a jogada que fechou remove o risco (AC-RISCO-06).
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('board-0').locator('.strike')).toHaveCount(0);
+  await page.getByTestId('cell-0.8').click();
+  await expect(page.getByTestId('board-0').locator('.strike')).toHaveCount(1);
+
+  // Fim da partida: risco grande atravessando os três tabuleiros.
+  for (const move of script.slice(5)) await page.getByTestId(`cell-${move}`).click();
+  await expect(page.getByTestId('board-root').locator('> .strike-layer .strike')).toHaveCount(1);
+});
+
 test('histórico registra as jogadas (REQ-STT-10)', async ({ page }) => {
   await startGame(page);
   await page.getByTestId('cell-4.0').click();

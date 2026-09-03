@@ -245,6 +245,59 @@ button.ghost {
 .mini-board {
   position: relative;
   padding: 7px;
+  --grid-inset: 7px;
+}
+
+/* Risco na linha vencedora (spec RISCO), sobreposto exatamente à grade. */
+
+.strike-layer {
+  position: absolute;
+  inset: var(--grid-inset, 0);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.strike {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.08;
+  stroke-linecap: round;
+}
+
+.macro-board > .strike-layer .strike {
+  stroke-width: 0.04;
+}
+
+.strike.mark-X {
+  color: var(--mark-x);
+}
+
+.strike.mark-O {
+  color: var(--mark-o);
+}
+
+/* REQ-RISCO-04: o traço é desenhado de uma ponta à outra ao acontecer. */
+.strike-layer.animate .strike {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: risca 0.35s ease-out forwards;
+}
+
+@keyframes risca {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strike-layer.animate .strike {
+    animation-duration: 0.01s;
+  }
+}
+
+/* REQ-RISCO-08: a marca grande cede protagonismo ao risco. */
+.struck > .board-result {
+  opacity: 0.3;
 }
 
 .mini-board > .board-grid {
@@ -312,7 +365,12 @@ button.ghost {
 }
 
 .decided > .board-grid {
-  opacity: 0.16;
+  opacity: 0.3;
+}
+
+/* Tabuleiro riscado mantém as marcas visíveis sob o traço, como no papel. */
+.struck > .board-grid {
+  opacity: 0.62;
 }
 
 .board-result {
@@ -433,6 +491,37 @@ button.ghost {
 .replay-counter {
   margin: 0;
   color: var(--ink-soft);
+}
+
+/* Controles do replay: passo a passo agrupado, reproduzir em destaque. */
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.replay-controls .step-group {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.replay-controls .step-group button {
+  min-width: 2.6rem;
+  font-size: 1.1rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.play-button {
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  border-width: 3px;
+  font-size: 1.2rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (max-width: 480px) {
