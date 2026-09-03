@@ -94,6 +94,9 @@ const pt = {
   leaveMatch: 'Sair da partida',
   leaveConfirmTitle: 'Sair da partida?',
   leaveConfirmBody: 'A partida em andamento será encerrada.',
+  generatingGif: 'Gerando GIF...',
+  soundOn: 'Som ligado',
+  soundOff: 'Som desligado',
   leaveConfirm: 'Sair',
   keepPlaying: 'Continuar jogando',
 };
@@ -190,6 +193,9 @@ const en: typeof pt = {
   leaveMatch: 'Leave match',
   leaveConfirmTitle: 'Leave the match?',
   leaveConfirmBody: 'The ongoing match will be ended.',
+  generatingGif: 'Generating GIF...',
+  soundOn: 'Sound on',
+  soundOff: 'Sound off',
   leaveConfirm: 'Leave',
   keepPlaying: 'Keep playing',
 };

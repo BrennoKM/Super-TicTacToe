@@ -87,6 +87,63 @@ test('exportar da biblioteca e importar de volta (AC-05, 06)', async ({ page }) 
   await expect(page.getByTestId('import-error')).toBeVisible();
 });
 
+test('controles do replay são inequívocos (AC-REPLAY2-07, 08)', async ({ page }) => {
+  await playFullMatch(page);
+  await page.getByTestId('open-replay').click();
+
+  // Cada controle tem rótulo acessível próprio, e reproduzir é um botão à parte.
+  const labels = await page.evaluate(() =>
+    ['replay-first', 'replay-prev', 'replay-play', 'replay-next', 'replay-last'].map(
+      (id) => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('aria-label') ?? '',
+    ),
+  );
+  expect(new Set(labels).size).toBe(5);
+  expect(labels.every((l) => l.length > 0)).toBe(true);
+  await expect(page.getByTestId('replay-play')).toHaveClass(/play-button/);
+
+  // Avançar anda exatamente uma jogada e permanece pausado.
+  await page.getByTestId('replay-first').click();
+  await expect(page.getByTestId('replay-counter')).toContainText('0 / 17');
+  await page.getByTestId('replay-next').click();
+  await expect(page.getByTestId('replay-counter')).toContainText('1 / 17');
+  await page.waitForTimeout(1200);
+  await expect(page.getByTestId('replay-counter')).toContainText('1 / 17');
+});
+
+test('quadro do GIF usa o fundo do tema (AC-REPLAY2-01, 02)', async ({ page }) => {
+  await playFullMatch(page);
+
+  const sample = async () =>
+    page.evaluate(async () => {
+      // Caminhos servidos pelo Vite; ficam em variável porque o TypeScript
+      // não resolve import absoluto de navegador.
+      const gifPath = '/src/replay/gif.ts';
+      const enginePath = '/src/engine/index.ts';
+      const gif = (await import(/* @vite-ignore */ gifPath)) as typeof import('../../src/replay/gif');
+      const engine = (await import(/* @vite-ignore */ enginePath)) as typeof import('../../src/engine');
+      const saved = JSON.parse(localStorage.getItem('stt.library') ?? '[]')[0];
+      const state = engine.replay({ config: saved.config, moves: saved.moves });
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d')!;
+      gif.drawState(ctx, state, gif.themePalette());
+      const [r, g, b] = ctx.getImageData(2, 2, 1, 1).data;
+      return { r, g, b };
+    });
+
+  // Tema claro: fundo de papel (creme claro).
+  const light = await sample();
+  expect(light.r).toBeGreaterThan(200);
+  expect(light.g).toBeGreaterThan(200);
+
+  // Tema escuro: fundo de lousa (escuro).
+  await page.getByTestId('theme-toggle').click();
+  const dark = await sample();
+  expect(dark.r).toBeLessThan(120);
+  expect(dark.g).toBeLessThan(120);
+});
+
 test('GIF da partida é baixado no fim e no replay (AC-07)', async ({ page }) => {
   await playFullMatch(page);
 
