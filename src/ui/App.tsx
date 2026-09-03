@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { soundsForTransition } from '../audio/events';
-import { playMark, playStrike, setMuted } from '../audio/sound';
+import { playMoveSounds, setMuted } from '../audio/sound';
 import { chooseMove } from '../bot/bot';
 import { applyMove, createGame, otherPlayer, replay, serialize, undo } from '../engine';
 import type { GameState, Path, Player } from '../engine';
@@ -119,9 +119,7 @@ export function App() {
 
   // REQ-SOM-01, 05, 09: toda marca que aparece no tabuleiro soa, venha de quem vier.
   function playTransition(before: GameState, after: GameState) {
-    const sounds = soundsForTransition(before, after);
-    if (sounds.mark !== null) playMark(sounds.mark, theme);
-    for (const scale of sounds.strikes) playStrike(scale, theme);
+    playMoveSounds(soundsForTransition(before, after), theme);
   }
 
   // Nomes de exibição por símbolo, resolvidos no momento do salvamento.

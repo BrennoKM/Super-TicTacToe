@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameConfig, Path, Player } from '../engine';
 import type { Messages } from '../i18n';
 import { soundsForTransition } from '../audio/events';
-import { playMark, playStrike } from '../audio/sound';
+import { playMoveSounds } from '../audio/sound';
 import { generateRoomCode } from '../p2p/protocol';
 import { P2PSession } from '../p2p/session';
 import type { SessionSnapshot } from '../p2p/session';
@@ -130,9 +130,7 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
                 // REQ-SOM-05: a jogada que chega do adversário também soa.
                 setSnapshot((prev) => {
                   if (prev !== null) {
-                    const sounds = soundsForTransition(prev.state, snap.state);
-                    if (sounds.mark !== null) playMark(sounds.mark, themeRef.current);
-                    for (const scale of sounds.strikes) playStrike(scale, themeRef.current);
+                    playMoveSounds(soundsForTransition(prev.state, snap.state), themeRef.current);
                   }
                   return snap;
                 });

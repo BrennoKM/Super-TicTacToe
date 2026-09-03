@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { soundsForTransition } from '../audio/events';
-import { playMark, playStrike } from '../audio/sound';
+import { playMoveSounds } from '../audio/sound';
 import { replay } from '../engine';
 import type { Messages } from '../i18n';
 import { exportEntry } from '../replay/exchange';
@@ -59,9 +59,7 @@ export function ReplayScreen({ msgs, entry, theme = 'light', onBack }: ReplayScr
         if (next !== s) {
           const before = replay({ config: entry.config, moves: entry.moves.slice(0, s) });
           const after = replay({ config: entry.config, moves: entry.moves.slice(0, next) });
-          const sounds = soundsForTransition(before, after);
-          if (sounds.mark !== null) playMark(sounds.mark, theme);
-          for (const scale of sounds.strikes) playStrike(scale, theme);
+          playMoveSounds(soundsForTransition(before, after), theme);
         }
         return next;
       });
