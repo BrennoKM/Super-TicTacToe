@@ -55,26 +55,21 @@ function scratchBuffer(ctx: AudioContext, duration: number, chalk: boolean): Aud
   const buffer = ctx.createBuffer(1, length, rate);
   const data = buffer.getChannelData(0);
 
-  // Giz na lousa agarra mais vezes por segundo e com grão mais curto e seco;
-  // lápis no papel tem grão um pouco mais espaçado e macio.
-  const grainsPerSecond = chalk ? 1150 : 780;
-  const grainLength = rate * (chalk ? 0.0035 : 0.0065);
+  // Transientes muito curtos e espaçados: o ouvido precisa distinguir cada
+  // agarra. Grão longo demais vira sopro, e sopro denso vira estouro.
+  const grainsPerSecond = chalk ? 900 : 600;
+  const grainLength = rate * (chalk ? 0.0008 : 0.0016);
 
   let cursor = 0;
   while (cursor < length) {
-    const amplitude = 0.3 + Math.random() * 0.7;
-    const grain = Math.max(4, Math.round(grainLength * (0.5 + Math.random())));
+    const amplitude = 0.25 + Math.random() * 0.75;
+    const grain = Math.max(3, Math.round(grainLength * (0.6 + Math.random() * 0.8)));
     for (let j = 0; j < grain && cursor + j < length; j++) {
-      const decay = Math.exp(-j / (grain * 0.35));
+      const decay = Math.exp(-j / (grain * 0.3));
       data[cursor + j] += (Math.random() * 2 - 1) * amplitude * decay;
     }
-    // Intervalo irregular entre agarras, que é o que soa como atrito real.
-    cursor += Math.max(1, Math.round((rate / grainsPerSecond) * (0.35 + Math.random() * 1.7)));
+    cursor += Math.max(2, Math.round((rate / grainsPerSecond) * (0.3 + Math.random() * 1.8)));
   }
-
-  let peak = 0;
-  for (let i = 0; i < length; i++) peak = Math.max(peak, Math.abs(data[i]));
-  if (peak > 0) for (let i = 0; i < length; i++) data[i] /= peak;
   return buffer;
 }
 
@@ -96,41 +91,46 @@ function scratch(ctx: AudioContext, options: ScratchOptions): void {
 
   const source = ctx.createBufferSource();
   source.buffer = scratchBuffer(ctx, duration, chalk);
-  source.playbackRate.value = 0.92 + Math.random() * 0.16;
 
-  // Tira o peso grave, que dá sensação de batida em vez de arrasto.
+  // Escrita quase não tem energia grave. Deixar grave passar é o que dá peso
+  // de pancada, e com envelope que decai vira efeito de explosão.
   const highpass = ctx.createBiquadFilter();
   highpass.type = 'highpass';
-  highpass.frequency.value = chalk ? 900 : 500;
+  highpass.frequency.value = chalk ? 1800 : 900;
 
-  // Ressonância: é ela que dá o timbre do material. O giz canta mais agudo
-  // na lousa; o grafite no papel responde mais baixo e abafado.
-  const body = ctx.createBiquadFilter();
-  body.type = 'bandpass';
-  const from = (chalk ? 3200 : 1700) * (0.94 + Math.random() * 0.12);
-  const to = (chalk ? 2750 : 1450) * (0.94 + Math.random() * 0.12);
-  body.frequency.setValueAtTime(from, start);
-  // A mão desacelera no fim do traço, e a banda acompanha.
-  body.frequency.linearRampToValueAtTime(to, start + duration);
-  body.Q.value = chalk ? 2.6 : 1.6;
+  // O caráter do material mora entre 2 e 5 kHz (é a faixa que a literatura de
+  // arranhado em quadro-negro aponta como a marcante). Realce fixo, sem
+  // varredura: varredura descendente é assinatura de explosão, não de risco.
+  const presence = ctx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = (chalk ? 3400 : 2100) * (0.95 + Math.random() * 0.1);
+  presence.Q.value = 0.9;
+  presence.gain.value = chalk ? 7 : 5;
 
-  // Envelope do gesto: a mão encosta, arrasta e levanta.
-  const steps = Math.max(32, Math.round(duration * 240));
+  // Corta o siseio muito agudo, que soaria como estática.
+  const lowpass = ctx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = chalk ? 9000 : 6500;
+
+  // Envelope de arrasto: entra rápido, mantém volume praticamente constante e
+  // sai rápido. Nada de inchar e decair, que é o formato de estouro.
+  const steps = Math.max(48, Math.round(duration * 200));
   const curve = new Float32Array(steps);
+  const wobbleHz = 9 + Math.random() * 8;
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    const attack = Math.min(1, t / 0.08);
-    const release = t > 0.88 ? (1 - t) / 0.12 : 1;
-    // Pressão da mão variando devagar ao longo do traço.
-    const pressure = 0.78 + 0.22 * Math.sin(t * Math.PI * (1.5 + Math.random()));
-    curve[i] = gain * attack * release * pressure;
+    const onset = Math.min(1, t / 0.05);
+    const offset = t > 0.93 ? (1 - t) / 0.07 : 1;
+    // Micro tremor da mão, sem alterar o corpo do som.
+    const hand = 1 + 0.14 * Math.sin(t * duration * wobbleHz * 2 * Math.PI);
+    curve[i] = gain * onset * offset * hand;
   }
   curve[steps - 1] = 0;
 
   const envelope = ctx.createGain();
   envelope.gain.setValueCurveAtTime(curve, start, duration);
 
-  source.connect(highpass).connect(body).connect(envelope).connect(ctx.destination);
+  source.connect(highpass).connect(presence).connect(lowpass).connect(envelope).connect(ctx.destination);
   source.start(start);
   source.stop(start + duration + 0.03);
 }
