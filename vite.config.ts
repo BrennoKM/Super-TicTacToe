@@ -10,5 +10,7 @@ export default defineConfig({
     include: ['tests/engine/**/*.test.ts', 'tests/p2p/**/*.test.ts'],
     environment: 'node',
     globals: true,
+    // As partidas bot contra bot no nível difícil passam folgado de 5s.
+    testTimeout: 60_000,
   },
 });
