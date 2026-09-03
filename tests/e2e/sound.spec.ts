@@ -60,7 +60,10 @@ test('sons de jogadas seguidas ficam em fila, sem sobrepor (RN-SOM-07, 10)', asy
     const starts: { start: number; dur: number }[] = [];
     const origStart = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number) {
-      starts.push({ start: +(when ?? 0).toFixed(3), dur: +this.buffer!.duration.toFixed(3) });
+      // Duração real ao ouvido: o clipe é esticado por playbackRate (x rápido,
+      // riscos mais devagar), então a duração bruta do buffer não basta aqui.
+      const effDur = this.buffer!.duration / (this.playbackRate.value || 1);
+      starts.push({ start: +(when ?? 0).toFixed(3), dur: +effDur.toFixed(3) });
       return origStart.call(this, when);
     };
 
@@ -85,7 +88,7 @@ test('sons de jogadas seguidas ficam em fila, sem sobrepor (RN-SOM-07, 10)', asy
     return starts;
   });
 
-  // o: 1, x1+x2: 2, risco pequeno: 1 → 4 sons, nenhum descartado
+  // toque do o: 1, as duas pernas do x: 2, risco pequeno: 1 → 4 sons, nenhum descartado
   expect(events).toHaveLength(4);
   const sorted = [...events].sort((a, b) => a.start - b.start);
   for (let i = 1; i < sorted.length; i++) {

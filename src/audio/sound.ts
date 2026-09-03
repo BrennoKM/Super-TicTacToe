@@ -1,12 +1,14 @@
-// Som de escrita (spec SOM), a partir de gravações reais curtas, não síntese.
+// Som de escrita (spec SOM), a partir de duas gravações reais bem curtas.
 //
-// A pesquisa de 2026-09-03 confirmou que não há atalho de síntese pronto pra
-// esse som (ver Notas Técnicas da spec): a comunidade inteira usa gravação, e
-// o guincho do giz é tema de artigo científico (fenômeno stick-slip). Cada
-// tentativa de sintetizar (ruído filtrado, trem de grãos, banda ressonante)
-// ficou ou percussiva ou com formato de explosão. Os clipes usados aqui vêm
-// de gravações de domínio livre com atribuição (ver créditos no rodapé do
-// jogo e RN-SOM-03 da spec).
+// Histórico da busca pelo som certo (2026-09-03): três rodadas de síntese não
+// convenceram (estalo, depois explosão, depois formato correto mas sem
+// caráter). A troca por gravação real também não convenceu de início: os
+// clipes vinham de janelas de rabisco contínuo, e soavam como raspar sem
+// parar. O que funcionou foi isolar o menor toque distinto que existia em
+// cada gravação, um clipe só por tema, e construir todos os eventos (as duas
+// pernas do X, o O, os dois riscos) variando a velocidade de reprodução
+// desse único toque: mais rápido e agudo pro X, mais lento e grave pros
+// riscos. Ver Notas Técnicas da spec SOM pro relato completo.
 
 export type Theme = 'light' | 'dark';
 export type Mark = 'X' | 'O';
@@ -51,32 +53,19 @@ function ensureContext(): AudioContext | null {
   }
 }
 
-const CLIP_FILES = {
-  light: {
-    x1: 'pencil-x1.mp3',
-    x2: 'pencil-x2.mp3',
-    o: 'pencil-o.mp3',
-    small: 'pencil-strike-small.mp3',
-    big: 'pencil-strike-big.mp3',
-  },
-  dark: {
-    x1: 'chalk-x1.mp3',
-    x2: 'chalk-x2.mp3',
-    o: 'chalk-o.mp3',
-    small: 'chalk-strike-small.mp3',
-    big: 'chalk-strike-big.mp3',
-  },
-} as const;
+// Um clipe só por tema: o menor toque isolado de cada gravação (RN-SOM-03).
+const CLIP_FILES: Record<Theme, string> = { light: 'pencil.mp3', dark: 'chalk.mp3' };
+const CLIP_DURATION_S: Record<Theme, number> = { light: 0.132, dark: 0.215 };
 
-// Duração de cada clipe, conhecida de antemão (vieram do corte com ffmpeg).
-// Usada pra reservar vaga na fila sem depender do fetch/decode terminar
-// (RN-SOM-10: a fila é só bookkeeping síncrono, nunca espera rede).
-const CLIP_DURATION_S = {
-  light: { x1: 0.28, x2: 0.294, o: 0.887, small: 1.172, big: 1.819 },
-  dark: { x1: 0.3, x2: 0.3, o: 0.8, small: 1.15, big: 1.85 },
-} as const;
-
-type ClipKey = keyof typeof CLIP_FILES.light;
+// Velocidade de reprodução por evento: mais rápido e agudo pro toque curto do
+// X, mais devagar e grave pros riscos, como um gesto maior. A duração efetiva
+// (usada pra reservar vaga na fila) é a duração do clipe dividida pela taxa.
+const RATE: Record<'x' | 'o' | 'small' | 'big', { base: number; jitter: number; gain: number }> = {
+  x: { base: 0.97, jitter: 0.07, gain: 0.85 },
+  o: { base: 0.82, jitter: 0.06, gain: 0.8 },
+  small: { base: 0.55, jitter: 0.05, gain: 0.85 },
+  big: { base: 0.38, jitter: 0.04, gain: 0.95 },
+};
 
 const bufferCache = new Map<string, Promise<AudioBuffer | null>>();
 
@@ -112,18 +101,12 @@ async function loadClip(ctx: AudioContext, file: string): Promise<AudioBuffer | 
 // no ouvido. Se a fila acumular mais de MAX_BACKLOG_S de atraso (jogadas
 // muito rápidas, autoplay do replay), a PRÓXIMA JOGADA inteira é descartada
 // em vez de empilhar: o áudio nunca fica muito atrás do que está na tela.
-//
-// O descarte é decidido uma vez por jogada, não por clipe (playMoveSounds):
-// uma jogada que fecha um tabuleiro pequeno e vence a partida no mesmo lance
-// dispara marca + risco pequeno + risco grande juntos, e cortar o risco
-// grande no meio (o som da vitória!) por causa do limite de atraso seria
-// pior que a fila ficar um pouco mais cheia por essa jogada.
 let queueFreeAt = 0; // AudioContext.currentTime da próxima vaga livre
 const MIN_GAP_S = 0.035;
 const MAX_BACKLOG_S = 1.1;
 
-// Reserva um horário de início, avançando a fila pela duração conhecida do
-// clipe. `extraGap` é uma pausa adicional intencional (ex: a mão tirando o
+// Reserva um horário de início, avançando a fila pela duração efetiva do
+// evento. `extraGap` é uma pausa adicional intencional (ex: a mão tirando o
 // giz da superfície entre as duas pernas do X), maior que o MIN_GAP padrão.
 // Não decide sozinha se descarta: isso é responsabilidade de quem chama,
 // uma vez por jogada (ver playMoveSounds).
@@ -139,18 +122,25 @@ function currentBacklogS(ctx: AudioContext): number {
   return queueFreeAt - now;
 }
 
-// Toca um clipe já com o horário reservado na fila serial.
-function playClip(ctx: AudioContext, theme: Theme, key: ClipKey, gain: number, start: number): void {
+// Toca o toque do tema, esticado pra virar o evento pedido (x, o ou risco),
+// na vaga já reservada na fila serial.
+function playTouch(
+  ctx: AudioContext,
+  theme: Theme,
+  event: keyof typeof RATE,
+  start: number,
+): void {
   void (async () => {
-    const buffer = await loadClip(ctx, CLIP_FILES[theme][key]);
+    const buffer = await loadClip(ctx, CLIP_FILES[theme]);
     if (buffer === null || muted) return;
 
+    const { base, jitter, gain } = RATE[event];
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.playbackRate.value = 0.94 + Math.random() * 0.12;
+    source.playbackRate.value = base + (Math.random() * 2 - 1) * jitter;
 
     const envelope = ctx.createGain();
-    envelope.gain.value = gain * (0.88 + Math.random() * 0.24);
+    envelope.gain.value = gain * (0.9 + Math.random() * 0.2);
 
     source.connect(envelope).connect(ctx.destination);
     // Se o carregamento (primeira vez) demorou mais que a vaga reservada,
@@ -159,10 +149,14 @@ function playClip(ctx: AudioContext, theme: Theme, key: ClipKey, gain: number, s
   })();
 }
 
+function effectiveDuration(theme: Theme, event: keyof typeof RATE): number {
+  return CLIP_DURATION_S[theme] / RATE[event].base;
+}
+
 // Toca a marca da jogada e os riscos que ela abriu (spec RISCO), tudo em
 // fila, como um pacote só: ou toca inteiro, ou (fila muito cheia) não toca
-// nada dessa jogada. REQ-SOM-02: X são dois traços com pausa real entre eles
-// (a mão tira o material da superfície); O é um traço único mais longo.
+// nada dessa jogada. REQ-SOM-02: X são dois toques com pausa real entre eles
+// (a mão tira o material da superfície); O é um toque único mais longo.
 // RN-SOM-08 (revista): o risco entra na fila logo após a marca, não mais
 // simultâneo a ela.
 export function playMoveSounds(sounds: import('./events').MoveSounds, theme: Theme): void {
@@ -172,14 +166,14 @@ export function playMoveSounds(sounds: import('./events').MoveSounds, theme: The
     if (currentBacklogS(ctx) > MAX_BACKLOG_S) return; // fila cheia: pula a jogada inteira
 
     if (sounds.mark === 'X') {
-      playClip(ctx, theme, 'x1', 0.85, reserveSlot(CLIP_DURATION_S[theme].x1));
-      playClip(ctx, theme, 'x2', 0.8, reserveSlot(CLIP_DURATION_S[theme].x2, 0.14));
+      playTouch(ctx, theme, 'x', reserveSlot(effectiveDuration(theme, 'x')));
+      playTouch(ctx, theme, 'x', reserveSlot(effectiveDuration(theme, 'x'), 0.14));
     } else if (sounds.mark === 'O') {
-      playClip(ctx, theme, 'o', 0.75, reserveSlot(CLIP_DURATION_S[theme].o));
+      playTouch(ctx, theme, 'o', reserveSlot(effectiveDuration(theme, 'o')));
     }
     for (const scale of sounds.strikes) {
-      const key = scale === 'big' ? 'big' : 'small';
-      playClip(ctx, theme, key, scale === 'big' ? 0.95 : 0.8, reserveSlot(CLIP_DURATION_S[theme][key]));
+      const event = scale === 'big' ? 'big' : 'small';
+      playTouch(ctx, theme, event, reserveSlot(effectiveDuration(theme, event)));
     }
   } catch {
     // áudio indisponível: segue em silêncio
