@@ -571,10 +571,30 @@ button.ghost {
   }
 }
 
-.app-footer {
-  text-align: center;
-  color: var(--ink-soft);
-  font-size: 0.75rem;
-  margin-top: 1.5rem;
-  padding-bottom: 0.5rem;
+/* Modal de informações: sobre o jogo, link do repositório e créditos de som. */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.modal-card {
+  /* .card usa --card-bg translúcido, pensado pra flutuar sobre o papel
+     pautado; empilhado com o fundo escurecido do modal isso ficava com uma
+     transparência dupla, ilegível. O modal precisa de superfície opaca. */
+  background: var(--bg);
+  max-width: 420px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-card a {
+  color: var(--mark-o);
 }

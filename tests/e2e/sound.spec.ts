@@ -41,9 +41,22 @@ test('desfazer não solicita clipe novo (RN-SOM-05)', async ({ page }) => {
   expect(requests.length).toBe(before); // nada novo pedido ao desfazer
 });
 
-test('créditos das gravações aparecem no rodapé (licença de atribuição)', async ({ page }) => {
+test('créditos das gravações ficam no modal de informações (licença de atribuição)', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('info-modal')).toBeHidden();
+  await page.getByTestId('info-open').click();
   await expect(page.getByTestId('sound-credits')).toContainText('soundbible.com');
+  await expect(page.getByRole('link', { name: /GitHub/i })).toHaveAttribute(
+    'href',
+    'https://github.com/BrennoKM/Super-TicTacToe',
+  );
+
+  // Esc fecha; clicar fora também fecha.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('info-modal')).toBeHidden();
+  await page.getByTestId('info-open').click();
+  await page.getByTestId('info-modal').click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId('info-modal')).toBeHidden();
 });
 
 // RN-SOM-07, 10: sons de jogadas próximas não tocam por cima uns dos outros.

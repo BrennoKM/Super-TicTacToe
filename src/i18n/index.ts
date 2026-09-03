@@ -100,6 +100,12 @@ const pt = {
   leaveConfirm: 'Sair',
   keepPlaying: 'Continuar jogando',
   soundCredits: 'Sons de escrita: gravações de Daniel Simion e Lisa Redfern (soundbible.com), com atribuição.',
+  infoLabel: 'Informações',
+  infoTitle: 'Super TicTacToe',
+  infoDescription: 'Jogo da velha em tabuleiros aninhados, no navegador: local, contra o bot ou via web por código de sala.',
+  infoRepoLabel: 'Código-fonte no GitHub',
+  infoSoundCreditsTitle: 'Créditos de som',
+  infoClose: 'Fechar',
 };
 
 const en: typeof pt = {
@@ -200,6 +206,12 @@ const en: typeof pt = {
   leaveConfirm: 'Leave',
   keepPlaying: 'Keep playing',
   soundCredits: 'Writing sounds: recordings by Daniel Simion and Lisa Redfern (soundbible.com), attribution required.',
+  infoLabel: 'Information',
+  infoTitle: 'Super TicTacToe',
+  infoDescription: 'Ultimate tic-tac-toe in your browser: local, against the bot, or online by room code.',
+  infoRepoLabel: 'Source code on GitHub',
+  infoSoundCreditsTitle: 'Sound credits',
+  infoClose: 'Close',
 };
 
 export type Messages = typeof pt;

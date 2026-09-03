@@ -105,8 +105,14 @@ async function loadClip(ctx: AudioContext, file: string): Promise<AudioBuffer | 
 // muito rápidas, autoplay do replay), a PRÓXIMA JOGADA inteira é descartada
 // em vez de empilhar: o áudio nunca fica muito atrás do que está na tela.
 let queueFreeAt = 0; // AudioContext.currentTime da próxima vaga livre
-const MIN_GAP_S = 0.035;
-const MAX_BACKLOG_S = 1.1;
+// 0,035s media como "sem sobreposição", mas na prática soava atropelado: o
+// ouvido só registra uma pausa de verdade acima de uns 100ms. Subido pra
+// 0,15s (2026-09-03, feedback de jogo real contra o bot).
+const MIN_GAP_S = 0.15;
+// Sobe proporcionalmente ao MIN_GAP maior, senão um único risco pequeno já
+// deixaria a fila perto do limite e derrubaria a próxima jogada com mais
+// frequência.
+const MAX_BACKLOG_S = 2.0;
 
 // Reserva um horário de início, avançando a fila pela duração efetiva do
 // evento. `extraGap` é uma pausa adicional intencional (ex: a mão tirando o
@@ -170,7 +176,11 @@ export function playMoveSounds(sounds: import('./events').MoveSounds, theme: The
 
     if (sounds.mark === 'X') {
       playTouch(ctx, theme, 'x', reserveSlot(effectiveDuration(theme, 'x')));
-      playTouch(ctx, theme, 'x', reserveSlot(effectiveDuration(theme, 'x'), 0.14));
+      // extraGap soma ao MIN_GAP que a reserva do primeiro toque já deixou
+      // (reserveSlot sempre adiciona MIN_GAP_S no final): 0,05 aqui dá uma
+      // pausa total de ~0,2s entre as pernas, um pouco maior que a folga
+      // genérica entre sons de jogadas diferentes, sem exagerar.
+      playTouch(ctx, theme, 'x', reserveSlot(effectiveDuration(theme, 'x'), 0.05));
     } else if (sounds.mark === 'O') {
       playTouch(ctx, theme, 'o', reserveSlot(effectiveDuration(theme, 'o')));
     }

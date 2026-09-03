@@ -54,6 +54,7 @@ export function App() {
   const [online, setOnline] = useState<OnlineInit | null>(null);
   const [pendingOnline, setPendingOnline] = useState<SavedOnline | null>(() => loadOnline());
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [replayEntry, setReplayEntry] = useState<LibraryEntry | null>(null);
   const [leaveAsk, setLeaveAsk] = useState(false);
 
@@ -69,6 +70,15 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.lang = language === 'pt' ? 'pt-BR' : 'en';
   }, [theme, language]);
+
+  useEffect(() => {
+    if (!infoOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setInfoOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [infoOpen]);
 
   const updatePrefs = (patch: Partial<Preferences>) => {
     setPrefs((prev) => {
@@ -289,6 +299,16 @@ export function App() {
       <header>
         <h1>{msgs.appTitle}</h1>
         <div className="header-controls">
+          <button
+            type="button"
+            className="ghost"
+            data-testid="info-open"
+            title={msgs.infoLabel}
+            aria-label={msgs.infoLabel}
+            onClick={() => setInfoOpen(true)}
+          >
+            ℹ️
+          </button>
           {!online && replayEntry === null && (
             <button
               type="button"
@@ -486,10 +506,38 @@ export function App() {
         </div>
       )}
 
-      {/* RN-SOM-03: as gravações de som têm licença de atribuição. */}
-      <footer className="app-footer" data-testid="sound-credits">
-        {msgs.soundCredits}
-      </footer>
+      {infoOpen && (
+        <div
+          className="modal-backdrop"
+          data-testid="info-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setInfoOpen(false);
+          }}
+        >
+          <div className="card modal-card" role="dialog" aria-modal="true" aria-label={msgs.infoTitle}>
+            <h2>{msgs.infoTitle}</h2>
+            <p>{msgs.infoDescription}</p>
+            <p>
+              <a href="https://github.com/BrennoKM/Super-TicTacToe" target="_blank" rel="noreferrer">
+                {msgs.infoRepoLabel}
+              </a>
+            </p>
+            <h3>{msgs.infoSoundCreditsTitle}</h3>
+            {/* RN-SOM-03: as gravações de som têm licença de atribuição. */}
+            <p data-testid="sound-credits">{msgs.soundCredits}</p>
+            <div className="controls">
+              <button
+                type="button"
+                className="primary"
+                data-testid="info-close"
+                onClick={() => setInfoOpen(false)}
+              >
+                {msgs.infoClose}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
