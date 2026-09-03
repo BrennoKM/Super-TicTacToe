@@ -2,3 +2,12 @@
 # Promptaria (gerado pelo install.sh)
 .promptaria
 *.bak-*
+
+# Node / build
+node_modules/
+dist/
+
+# Testes
+test-results/
+playwright-report/
+coverage/
