@@ -53,6 +53,7 @@ export function App() {
   const [pendingOnline, setPendingOnline] = useState<SavedOnline | null>(() => loadOnline());
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [replayEntry, setReplayEntry] = useState<LibraryEntry | null>(null);
+  const [leaveAsk, setLeaveAsk] = useState(false);
 
   const language: Language = prefs.language ?? detectLanguage();
   const msgs = messages[language];
@@ -412,8 +413,12 @@ export function App() {
           onUndo={handleUndo}
           onRematch={handleRematch}
           onChangeSettings={() => {
-            clearMatch();
-            setMatch(null);
+            // REQ-CONEXAO-06: partida em andamento pede confirmação.
+            if (match.state.result === null) setLeaveAsk(true);
+            else {
+              clearMatch();
+              setMatch(null);
+            }
           }}
           onOpenReplay={() =>
             setReplayEntry({
@@ -430,6 +435,31 @@ export function App() {
             })
           }
         />
+      )}
+
+      {leaveAsk && match !== null && (
+        <div className="card online-banner" data-testid="leave-dialog">
+          <h2>{msgs.leaveConfirmTitle}</h2>
+          <p>{msgs.leaveConfirmBody}</p>
+          <div className="controls">
+            <button
+              type="button"
+              className="primary"
+              data-testid="leave-confirm"
+              onClick={() => {
+                // RN-CONEXAO-03: a partida não fica pendente pra retomada.
+                clearMatch();
+                setMatch(null);
+                setLeaveAsk(false);
+              }}
+            >
+              {msgs.leaveConfirm}
+            </button>
+            <button type="button" data-testid="leave-cancel" onClick={() => setLeaveAsk(false)}>
+              {msgs.keepPlaying}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

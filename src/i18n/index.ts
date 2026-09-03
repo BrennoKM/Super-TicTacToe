@@ -89,6 +89,13 @@ const pt = {
   nextBtn: 'Próxima',
   lastBtn: 'Fim',
   resultDraw: 'empate',
+  errTimeout:
+    'Não foi possível conectar (a rede de um dos lados pode estar bloqueando). Tente de novo ou peça um código novo.',
+  leaveMatch: 'Sair da partida',
+  leaveConfirmTitle: 'Sair da partida?',
+  leaveConfirmBody: 'A partida em andamento será encerrada.',
+  leaveConfirm: 'Sair',
+  keepPlaying: 'Continuar jogando',
 };
 
 const en: typeof pt = {
@@ -178,6 +185,13 @@ const en: typeof pt = {
   nextBtn: 'Next',
   lastBtn: 'End',
   resultDraw: 'draw',
+  errTimeout:
+    'Could not connect (one side may be behind a restrictive network). Try again or ask for a new code.',
+  leaveMatch: 'Leave match',
+  leaveConfirmTitle: 'Leave the match?',
+  leaveConfirmBody: 'The ongoing match will be ended.',
+  leaveConfirm: 'Leave',
+  keepPlaying: 'Keep playing',
 };
 
 export type Messages = typeof pt;

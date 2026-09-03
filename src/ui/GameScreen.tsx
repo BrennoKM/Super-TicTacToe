@@ -80,6 +80,12 @@ export function GameScreen(props: GameScreenProps) {
         >
           {msgs.undo}
         </button>
+        {/* REQ-CONEXAO-05: sair está disponível durante a partida, não só no fim. */}
+        {state.result === null && (
+          <button type="button" onClick={onChangeSettings} data-testid="leave-match">
+            {msgs.leaveMatch}
+          </button>
+        )}
         {state.result !== null && (
           <>
             <button type="button" className="primary" onClick={onRematch} data-testid="rematch">
