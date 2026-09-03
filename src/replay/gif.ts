@@ -276,6 +276,14 @@ async function ensureFonts(): Promise<void> {
 }
 
 // Gera o GIF completo (só no navegador; a parte testável a seco é buildFrames).
+//
+// Paleta única pra todos os quadros: antes cada quadro tinha sua própria
+// paleta de 64 cores (quantize por quadro), então o GIF acabava com uma
+// tabela de cores global (a do primeiro quadro) e uma tabela local extra em
+// cada um dos outros, um GIF tecnicamente válido, mas que alguns app de
+// mensagem lidam pior do que com um GIF de tabela de cores só global. Como o
+// tema tem poucas cores fixas, uma paleta combinando todos os quadros cabe
+// tranquilamente nas 64 cores e sai mais leve, sem essa duplicação.
 export async function generateGif(
   entry: Pick<LibraryEntry, 'config' | 'moves'>,
 ): Promise<Blob> {
@@ -289,14 +297,32 @@ export async function generateGif(
   // Semente estável por partida: o tremor não muda entre quadros.
   const jitter = makeJitter(entry.moves.length * 13 + 7);
 
-  const gif = GIFEncoder();
-  for (const frame of frames) {
+  // 1ª passada: desenha e guarda os pixels de cada quadro.
+  const rendered: ImageData[] = frames.map((frame) => {
     drawState(ctx, frame.state, palette, jitter);
-    const { data, width, height } = ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
-    const colors = quantize(data, 64);
-    const index = applyPalette(data, colors);
-    gif.writeFrame(index, width, height, { palette: colors, delay: frame.delayMs });
+    return ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
+  });
+
+  // Paleta global combinando os pixels de todos os quadros.
+  const totalLength = rendered.reduce((n, img) => n + img.data.length, 0);
+  const combined = new Uint8ClampedArray(totalLength);
+  let offset = 0;
+  for (const img of rendered) {
+    combined.set(img.data, offset);
+    offset += img.data.length;
   }
+  const colors = quantize(combined, 64);
+
+  // 2ª passada: cada quadro indexado pela mesma paleta; só o 1º quadro
+  // carrega a paleta no arquivo (os demais reusam a global automaticamente).
+  const gif = GIFEncoder();
+  rendered.forEach((img, i) => {
+    const index = applyPalette(img.data, colors);
+    gif.writeFrame(index, GIF_SIZE, GIF_SIZE, {
+      delay: frames[i].delayMs,
+      ...(i === 0 ? { palette: colors } : {}),
+    });
+  });
   gif.finish();
   const bytes = gif.bytes();
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
