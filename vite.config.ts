@@ -7,7 +7,11 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   test: {
-    include: ['tests/engine/**/*.test.ts', 'tests/p2p/**/*.test.ts'],
+    include: [
+      'tests/engine/**/*.test.ts',
+      'tests/p2p/**/*.test.ts',
+      'tests/replay/**/*.test.ts',
+    ],
     environment: 'node',
     globals: true,
     // As partidas bot contra bot no nível difícil passam folgado de 5s.
