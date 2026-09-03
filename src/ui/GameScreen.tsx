@@ -14,6 +14,8 @@ interface GameScreenProps {
   onUndo: () => void;
   onRematch: () => void;
   onChangeSettings: () => void;
+  onOpenReplay?: () => void;
+  onDownloadGif?: () => void;
 }
 
 export function GameScreen(props: GameScreenProps) {
@@ -27,6 +29,8 @@ export function GameScreen(props: GameScreenProps) {
     onUndo,
     onRematch,
     onChangeSettings,
+    onOpenReplay,
+    onDownloadGif,
   } = props;
 
   const nameOf = (player: Player) => {
@@ -84,6 +88,16 @@ export function GameScreen(props: GameScreenProps) {
             <button type="button" onClick={onChangeSettings} data-testid="change-settings">
               {msgs.changeSettings}
             </button>
+            {onOpenReplay && (
+              <button type="button" onClick={onOpenReplay} data-testid="open-replay">
+                {msgs.watchReplay}
+              </button>
+            )}
+            {onDownloadGif && (
+              <button type="button" onClick={onDownloadGif} data-testid="download-gif">
+                {msgs.downloadGif}
+              </button>
+            )}
           </>
         )}
       </div>

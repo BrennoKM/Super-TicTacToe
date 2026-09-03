@@ -6,9 +6,12 @@ import { P2PSession } from '../p2p/session';
 import type { SessionSnapshot } from '../p2p/session';
 import { connectTransport } from '../p2p/transport';
 import type { Role, TransportError } from '../p2p/transport';
+import { addToLibrary, removeFromLibrary } from '../replay/library';
+import type { LibraryEntry } from '../replay/library';
 import { clearOnline, saveOnline } from '../storage/persist';
 import type { SavedOnline } from '../storage/persist';
 import { GameScreen } from './GameScreen';
+import { downloadEntryGif, ReplayScreen } from './ReplayScreen';
 
 export interface OnlineInit {
   role: Role;
@@ -43,6 +46,25 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
   const sessionRef = useRef<P2PSession | null>(null);
   const savedRef = useRef<SavedOnline | null>(init.saved ?? null);
   const retriesRef = useRef(0);
+  const [replayOpen, setReplayOpen] = useState(false);
+  const libraryIdRef = useRef<string | null>(null);
+  const prevResultRef = useRef<SessionSnapshot['state']['result']>(null);
+
+  function snapshotEntry(snap: SessionSnapshot): LibraryEntry {
+    const other: 'X' | 'O' = snap.hostSymbol === 'X' ? 'O' : 'X';
+    return {
+      id: libraryIdRef.current ?? 'atual',
+      finishedAt: Date.now(),
+      mode: 'online',
+      names: {
+        [snap.hostSymbol]: snap.names[0] || 'Host',
+        [other]: snap.names[1] || 'Guest',
+      } as LibraryEntry['names'],
+      config: { ...snap.state.config },
+      moves: snap.state.moves,
+      result: snap.state.result ?? 'draw',
+    };
+  }
 
   const connect = useCallback(
     (roomCode: string) => {
@@ -71,6 +93,24 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
                   setRematchAsk(false);
                   setRematchSent(false);
                 }
+                // REQ-REPLAY-01 / RN-REPLAY-01 no online: entra na biblioteca ao
+                // terminar; sai se o fim for desfeito (undo aceito após o fim).
+                const result = snap.state.result;
+                if (prevResultRef.current === null && result !== null) {
+                  libraryIdRef.current = addToLibrary({
+                    mode: 'online',
+                    names: snapshotEntry(snap).names,
+                    config: { ...snap.state.config },
+                    moves: snap.state.moves,
+                    result,
+                  }).id;
+                } else if (prevResultRef.current !== null && result === null) {
+                  if (libraryIdRef.current !== null) {
+                    removeFromLibrary(libraryIdRef.current);
+                    libraryIdRef.current = null;
+                  }
+                }
+                prevResultRef.current = result;
                 savedRef.current = {
                   code: roomCode,
                   role: init.role,
@@ -199,6 +239,16 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
     session?.playMove(path);
   }
 
+  if (replayOpen) {
+    return (
+      <ReplayScreen
+        msgs={msgs}
+        entry={snapshotEntry(snapshot)}
+        onBack={() => setReplayOpen(false)}
+      />
+    );
+  }
+
   return (
     <>
       {disconnected && (
@@ -233,6 +283,8 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
           session?.proposeRematch();
         }}
         onChangeSettings={endMatch}
+        onOpenReplay={() => setReplayOpen(true)}
+        onDownloadGif={() => downloadEntryGif(snapshotEntry(snapshot))}
       />
 
       <div className="online-footer controls">

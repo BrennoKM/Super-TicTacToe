@@ -402,6 +402,39 @@ button.ghost {
   margin: 0.2rem 0;
 }
 
+/* Biblioteca e replay */
+
+.library {
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.library-list {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.library-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-bottom: 1px dashed var(--line-soft);
+  padding-bottom: 0.6rem;
+}
+
+.library-list .controls {
+  justify-content: flex-start;
+}
+
+.replay-counter {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 @media (max-width: 480px) {
   body {
     font-size: 16px;

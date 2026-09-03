@@ -14,9 +14,13 @@ import {
   savePreferences,
 } from '../storage/persist';
 import type { SavedOnline } from '../storage/persist';
+import { addToLibrary, removeFromLibrary } from '../replay/library';
+import type { LibraryEntry } from '../replay/library';
+import { LibraryScreen } from './LibraryScreen';
 import { OnlineGame } from './OnlineGame';
 import type { OnlineInit } from './OnlineGame';
 import type { MatchMode, Preferences, SavedMatch, SessionScore } from '../storage/persist';
+import { downloadEntryGif, ReplayScreen } from './ReplayScreen';
 import { GameScreen } from './GameScreen';
 import { SetupScreen } from './SetupScreen';
 import type { MatchSetup } from './SetupScreen';
@@ -28,6 +32,7 @@ interface Match {
   score: SessionScore;
   counted: boolean; // o resultado desta partida já entrou no placar?
   mode: MatchMode;
+  libraryId: string | null; // entrada criada na biblioteca quando a partida terminou
 }
 
 function botSymbol(mode: MatchMode): Player | null {
@@ -46,6 +51,8 @@ export function App() {
   const [match, setMatch] = useState<Match | null>(null);
   const [online, setOnline] = useState<OnlineInit | null>(null);
   const [pendingOnline, setPendingOnline] = useState<SavedOnline | null>(() => loadOnline());
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [replayEntry, setReplayEntry] = useState<LibraryEntry | null>(null);
 
   const language: Language = prefs.language ?? detectLanguage();
   const msgs = messages[language];
@@ -99,7 +106,33 @@ export function App() {
       score: match?.score ?? zeroScore,
       counted: false,
       mode: setup.mode,
+      libraryId: null,
     });
+  }
+
+  // Nomes de exibição por símbolo, resolvidos no momento do salvamento.
+  function namesBySymbol(m: Match): Record<Player, string> {
+    const p1 = m.playerNames[0] || msgs.player1;
+    const p2 =
+      m.mode.type === 'bot'
+        ? `${msgs.botName} (${
+            { easy: msgs.diffEasy, medium: msgs.diffMedium, hard: msgs.diffHard }[
+              m.mode.difficulty
+            ]
+          })`
+        : m.playerNames[1] || msgs.player2;
+    return m.player1Symbol === 'X' ? { X: p1, O: p2 } : { X: p2, O: p1 };
+  }
+
+  // Entrada de biblioteca (efêmera ou pra salvar) a partir da partida atual.
+  function matchEntry(m: Match, state: GameState): Omit<LibraryEntry, 'id' | 'finishedAt'> {
+    return {
+      mode: m.mode.type,
+      names: namesBySymbol(m),
+      config: { ...state.config },
+      moves: state.moves,
+      result: state.result ?? 'draw',
+    };
   }
 
   function applyPath(current: Match, path: Path) {
@@ -109,14 +142,16 @@ export function App() {
     } catch {
       return; // REQ-STT-02: jogada inválida não altera nada
     }
-    let { score, counted } = current;
+    let { score, counted, libraryId } = current;
     if (state.result !== null && !counted) {
       score = { ...score };
       if (state.result === 'draw') score.draws += 1;
       else score[state.result] += 1;
       counted = true;
+      // REQ-REPLAY-01: partida terminada entra na biblioteca.
+      libraryId = addToLibrary(matchEntry(current, state)).id;
     }
-    setAndPersist({ ...current, state, score, counted });
+    setAndPersist({ ...current, state, score, counted, libraryId });
   }
 
   function handleHumanMove(path: Path) {
@@ -145,14 +180,19 @@ export function App() {
     const count =
       bot !== null && match.state.moves.at(-1)?.player === bot ? 2 : 1;
     // Desfazer após o fim reabre a partida; o placar da partida contada é revertido.
-    let { score, counted } = match;
+    let { score, counted, libraryId } = match;
     if (counted && match.state.result !== null) {
       score = { ...score };
       if (match.state.result === 'draw') score.draws -= 1;
       else score[match.state.result] -= 1;
       counted = false;
+      // RN-REPLAY-01: o fim desfeito sai da biblioteca.
+      if (libraryId !== null) {
+        removeFromLibrary(libraryId);
+        libraryId = null;
+      }
     }
-    setAndPersist({ ...match, state: undo(match.state, count), score, counted });
+    setAndPersist({ ...match, state: undo(match.state, count), score, counted, libraryId });
   }
 
   // REQ-STT-08: revanche mantém adversário e regras, alternando quem começa.
@@ -166,6 +206,7 @@ export function App() {
       ...match,
       state: createGame(config),
       counted: false,
+      libraryId: null,
     });
   }
 
@@ -180,6 +221,7 @@ export function App() {
         score: pendingResume.score,
         counted: false,
         mode: pendingResume.mode,
+        libraryId: null,
       });
     } catch {
       clearMatch();
@@ -234,6 +276,16 @@ export function App() {
       <header>
         <h1>{msgs.appTitle}</h1>
         <div className="header-controls">
+          {!online && replayEntry === null && (
+            <button
+              type="button"
+              className="ghost"
+              data-testid="library-open"
+              onClick={() => setLibraryOpen((open) => !open)}
+            >
+              {msgs.library}
+            </button>
+          )}
           <label
             className="theme-switch"
             title={`${msgs.theme}: ${theme === 'dark' ? msgs.themeDark : msgs.themeLight}`}
@@ -258,7 +310,20 @@ export function App() {
         </div>
       </header>
 
-      {online && (
+      {replayEntry !== null && (
+        <ReplayScreen msgs={msgs} entry={replayEntry} onBack={() => setReplayEntry(null)} />
+      )}
+
+      {replayEntry === null && libraryOpen && !online && (
+        <LibraryScreen
+          msgs={msgs}
+          language={language}
+          onOpenReplay={setReplayEntry}
+          onBack={() => setLibraryOpen(false)}
+        />
+      )}
+
+      {replayEntry === null && !libraryOpen && online && (
         <OnlineGame
           msgs={msgs}
           init={online}
@@ -269,7 +334,7 @@ export function App() {
         />
       )}
 
-      {!online && pendingOnline && (
+      {replayEntry === null && !libraryOpen && !online && pendingOnline && (
         <div className="card resume" data-testid="online-resume-dialog">
           <h2>{msgs.onlineResumeTitle}</h2>
           <p>
@@ -305,7 +370,7 @@ export function App() {
         </div>
       )}
 
-      {!online && !pendingOnline && pendingResume && (
+      {replayEntry === null && !libraryOpen && !online && !pendingOnline && pendingResume && (
         <div className="card resume" data-testid="resume-dialog">
           <h2>{msgs.resumeTitle}</h2>
           <p>{msgs.resumeQuestion}</p>
@@ -320,7 +385,7 @@ export function App() {
         </div>
       )}
 
-      {!online && !pendingOnline && !pendingResume && match === null && (
+      {replayEntry === null && !libraryOpen && !online && !pendingOnline && !pendingResume && match === null && (
         <SetupScreen
           msgs={msgs}
           initial={initialSetup}
@@ -336,7 +401,7 @@ export function App() {
         />
       )}
 
-      {!online && !pendingOnline && !pendingResume && match !== null && (
+      {replayEntry === null && !libraryOpen && !online && !pendingOnline && !pendingResume && match !== null && (
         <GameScreen
           msgs={msgs}
           state={match.state}
@@ -350,6 +415,20 @@ export function App() {
             clearMatch();
             setMatch(null);
           }}
+          onOpenReplay={() =>
+            setReplayEntry({
+              id: match.libraryId ?? 'atual',
+              finishedAt: Date.now(),
+              ...matchEntry(match, match.state),
+            })
+          }
+          onDownloadGif={() =>
+            downloadEntryGif({
+              id: match.libraryId ?? 'atual',
+              finishedAt: Date.now(),
+              ...matchEntry(match, match.state),
+            })
+          }
         />
       )}
     </div>
