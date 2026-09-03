@@ -21,6 +21,34 @@ interface Callbacks {
   onError: (error: TransportError) => void;
 }
 
+// Tentativa de conexão cancelável (REQ-CONEXAO-01, RN-CONEXAO-04): cancelar
+// destrói o peer, liberando o código da sala no broker imediatamente.
+export interface TransportAttempt {
+  cancel(): void;
+}
+
+// REQ-CONEXAO-04: STUN não basta entre redes diferentes (NAT restritivo é
+// comum em rede móvel); os TURN públicos do Open Relay fazem o relay.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
+
 // ---------------------------------------------------------------------------
 // PeerJS (produção): broker público só pra sinalização; jogo no DataChannel.
 // ---------------------------------------------------------------------------
@@ -32,7 +60,13 @@ type PeerConnection = {
   open: boolean;
 };
 
-function wrapConnection(conn: PeerConnection): Transport {
+type PeerLike = {
+  on(event: string, cb: (arg?: never) => void): void;
+  connect(id: string, options?: unknown): PeerConnection;
+  destroy(): void;
+};
+
+function wrapConnection(conn: PeerConnection, destroyPeer: () => void): Transport {
   let messageCb: (raw: string) => void = () => {};
   let closeCb: () => void = () => {};
   conn.on('data', (data) => messageCb(String(data)));
@@ -40,42 +74,87 @@ function wrapConnection(conn: PeerConnection): Transport {
   conn.on('error', () => closeCb());
   return {
     send: (raw) => conn.send(raw),
-    close: () => conn.close(),
+    // Fechar a partida destrói o peer junto: sem isso a sala continuaria
+    // registrada no broker aceitando conexões fantasma (REQ-CONEXAO-01).
+    close: () => {
+      try {
+        conn.close();
+      } finally {
+        destroyPeer();
+      }
+    },
     onMessage: (cb) => (messageCb = cb),
     onClose: (cb) => (closeCb = cb),
   };
 }
 
-async function connectPeerJs(role: Role, code: string, callbacks: Callbacks): Promise<void> {
-  const { default: Peer } = await import('peerjs');
+function connectPeerJs(role: Role, code: string, callbacks: Callbacks): TransportAttempt {
+  let peer: PeerLike | null = null;
+  let cancelled = false;
 
-  if (role === 'host') {
-    const peer = new Peer(roomPeerId(code));
-    let accepted: PeerConnection | null = null;
-    peer.on('error', (err: { type?: string }) => {
-      if (err.type === 'unavailable-id') callbacks.onError({ kind: 'codigo-em-uso' });
-      else if (!accepted) callbacks.onError({ kind: 'broker-indisponivel' });
-    });
-    peer.on('connection', (conn: PeerConnection) => {
-      if (accepted && accepted.open) {
-        // Sala cheia: recusa conexões além da primeira.
-        conn.on('open', () => conn.close());
-        return;
-      }
-      accepted = conn;
-      conn.on('open', () => callbacks.onOpen(wrapConnection(conn)));
-    });
-  } else {
-    const peer = new Peer();
-    peer.on('error', (err: { type?: string }) => {
-      if (err.type === 'peer-unavailable') callbacks.onError({ kind: 'sala-nao-encontrada' });
-      else callbacks.onError({ kind: 'broker-indisponivel' });
-    });
-    peer.on('open', () => {
-      const conn = peer.connect(roomPeerId(code), { reliable: true }) as PeerConnection;
-      conn.on('open', () => callbacks.onOpen(wrapConnection(conn)));
-    });
-  }
+  const destroy = () => {
+    const target = peer;
+    peer = null;
+    try {
+      target?.destroy();
+    } catch {
+      // peer já destruído ou nunca aberto
+    }
+  };
+
+  const attempt: TransportAttempt = {
+    cancel: () => {
+      cancelled = true;
+      destroy();
+    },
+  };
+
+  void (async () => {
+    const { default: Peer } = await import('peerjs');
+    if (cancelled) return;
+
+    const options = { config: { iceServers: ICE_SERVERS } };
+
+    if (role === 'host') {
+      const created = new Peer(roomPeerId(code), options) as unknown as PeerLike;
+      peer = created;
+      let accepted: PeerConnection | null = null;
+      created.on('error', ((err: { type?: string }) => {
+        if (cancelled) return;
+        if (err.type === 'unavailable-id') callbacks.onError({ kind: 'codigo-em-uso' });
+        else if (!accepted) callbacks.onError({ kind: 'broker-indisponivel' });
+      }) as never);
+      created.on('connection', ((conn: PeerConnection) => {
+        if (cancelled) return;
+        if (accepted && accepted.open) {
+          // Sala cheia: recusa conexões além da primeira.
+          conn.on('open', () => conn.close());
+          return;
+        }
+        accepted = conn;
+        conn.on('open', () => {
+          if (!cancelled) callbacks.onOpen(wrapConnection(conn, destroy));
+        });
+      }) as never);
+    } else {
+      const created = new Peer(undefined as unknown as string, options) as unknown as PeerLike;
+      peer = created;
+      created.on('error', ((err: { type?: string }) => {
+        if (cancelled) return;
+        if (err.type === 'peer-unavailable') callbacks.onError({ kind: 'sala-nao-encontrada' });
+        else callbacks.onError({ kind: 'broker-indisponivel' });
+      }) as never);
+      created.on('open', (() => {
+        if (cancelled) return;
+        const conn = created.connect(roomPeerId(code), { reliable: true });
+        conn.on('open', () => {
+          if (!cancelled) callbacks.onOpen(wrapConnection(conn, destroy));
+        });
+      }) as never);
+    }
+  })();
+
+  return attempt;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,10 +162,12 @@ async function connectPeerJs(role: Role, code: string, callbacks: Callbacks): Pr
 // Ativado por localStorage["stt.transport"] = "broadcast".
 // ---------------------------------------------------------------------------
 
-function connectBroadcast(role: Role, code: string, callbacks: Callbacks): void {
+function connectBroadcast(role: Role, code: string, callbacks: Callbacks): TransportAttempt {
   const channel = new BroadcastChannel(`stt-room-${code}`);
   const me = role;
   let opened = false;
+  let cancelled = false;
+  let hostPresent = role === 'host';
   let messageCb: (raw: string) => void = () => {};
   let closeCb: () => void = () => {};
 
@@ -101,9 +182,19 @@ function connectBroadcast(role: Role, code: string, callbacks: Callbacks): void 
   };
 
   channel.onmessage = (event) => {
+    if (cancelled) return;
     const data = event.data as { from: Role; raw?: string; ctrl?: string };
     if (data.from === me) return;
-    if (data.ctrl === 'join' && me === 'host') {
+    // Sondagem de sala: só um host presente responde (AC-CONEXAO-01).
+    if (data.ctrl === 'ping-room' && me === 'host' && hostPresent) {
+      channel.postMessage({ from: me, ctrl: 'room-alive' });
+      return;
+    }
+    if (data.ctrl === 'room-alive' && me === 'guest') {
+      channel.postMessage({ from: me, ctrl: 'join' });
+      return;
+    }
+    if (data.ctrl === 'join' && me === 'host' && hostPresent) {
       channel.postMessage({ from: me, ctrl: 'welcome' });
       if (!opened) {
         opened = true;
@@ -124,20 +215,38 @@ function connectBroadcast(role: Role, code: string, callbacks: Callbacks): void 
   };
 
   if (role === 'guest') {
-    channel.postMessage({ from: me, ctrl: 'join' });
+    channel.postMessage({ from: me, ctrl: 'ping-room' });
     setTimeout(() => {
-      if (!opened) callbacks.onError({ kind: 'sala-nao-encontrada' });
-    }, 2000);
+      if (!opened && !cancelled) callbacks.onError({ kind: 'sala-nao-encontrada' });
+    }, 1500);
   }
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      hostPresent = false;
+      try {
+        channel.postMessage({ from: me, ctrl: 'bye' });
+        channel.close();
+      } catch {
+        // canal já fechado
+      }
+    },
+  };
 }
 
-export function connectTransport(role: Role, code: string, callbacks: Callbacks): void {
+export function connectTransport(
+  role: Role,
+  code: string,
+  callbacks: Callbacks,
+): TransportAttempt {
   let useBroadcast = false;
   try {
     useBroadcast = localStorage.getItem('stt.transport') === 'broadcast';
   } catch {
     // sem storage: segue no PeerJS
   }
-  if (useBroadcast) connectBroadcast(role, code, callbacks);
-  else void connectPeerJs(role, code, callbacks);
+  return useBroadcast
+    ? connectBroadcast(role, code, callbacks)
+    : connectPeerJs(role, code, callbacks);
 }
