@@ -47,6 +47,18 @@ function startsWith(path: Path, prefix: Path): boolean {
   return prefix.every((index, i) => path[i] === index);
 }
 
+// Todas as jogadas legais do jogador da vez.
+export function legalMoves(state: GameState): Path[] {
+  const moves: Path[] = [];
+  for (const boardPath of allowedBoards(state)) {
+    for (let cell = 0; cell < 9; cell++) {
+      const path = [...boardPath, cell];
+      if (getNode(state.board, path) === null) moves.push(path);
+    }
+  }
+  return moves;
+}
+
 export type MoveError =
   | 'partida-encerrada'
   | 'caminho-invalido'
