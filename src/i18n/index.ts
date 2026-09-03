@@ -1,0 +1,93 @@
+// REQ-STT-17: interface em português e inglês.
+
+export type Language = 'pt' | 'en';
+
+const pt = {
+  appTitle: 'Super TicTacToe',
+  language: 'Idioma',
+  theme: 'Tema',
+  themeLight: 'Caderno',
+  themeDark: 'Lousa',
+  newGame: 'Nova partida',
+  localMode: 'Dois jogadores (local)',
+  player1: 'Jogador 1',
+  player2: 'Jogador 2',
+  playerNamePlaceholder: 'nome',
+  symbolOfPlayer1: 'Símbolo do Jogador 1',
+  whoStarts: 'Quem começa',
+  rules: 'Regras',
+  clearVariant: 'Variante de limpeza',
+  clearVariantHint: 'conquistar um tabuleiro apaga as jogadas dos tabuleiros em aberto',
+  tiebreak: 'Desempate no tabuleiro grande',
+  tiebreakMajority: 'maioria de tabuleiros vence',
+  tiebreakNeutral: 'empatado não conta pra ninguém',
+  tiebreakBoth: 'empatado conta pros dois',
+  start: 'Começar',
+  turnOf: 'Vez de',
+  undo: 'Desfazer',
+  history: 'Histórico',
+  score: 'Placar',
+  draws: 'Empates',
+  wins: 'vitórias',
+  boardLabel: 'tabuleiro',
+  cellLabel: 'célula',
+  winner: 'venceu!',
+  draw: 'Empate!',
+  rematch: 'Revanche',
+  changeSettings: 'Mudar configuração',
+  resumeTitle: 'Partida em andamento encontrada',
+  resumeQuestion: 'Quer retomar de onde parou?',
+  resume: 'Retomar',
+  discard: 'Descartar',
+  moveNumber: 'jogada',
+};
+
+const en: typeof pt = {
+  appTitle: 'Super TicTacToe',
+  language: 'Language',
+  theme: 'Theme',
+  themeLight: 'Notebook',
+  themeDark: 'Chalkboard',
+  newGame: 'New game',
+  localMode: 'Two players (local)',
+  player1: 'Player 1',
+  player2: 'Player 2',
+  playerNamePlaceholder: 'name',
+  symbolOfPlayer1: 'Player 1 symbol',
+  whoStarts: 'Who starts',
+  rules: 'Rules',
+  clearVariant: 'Clearing variant',
+  clearVariantHint: 'winning a board erases the moves of all open boards',
+  tiebreak: 'Big board tiebreak',
+  tiebreakMajority: 'majority of boards wins',
+  tiebreakNeutral: 'a drawn board counts for no one',
+  tiebreakBoth: 'a drawn board counts for both',
+  start: 'Start',
+  turnOf: 'Turn of',
+  undo: 'Undo',
+  history: 'History',
+  score: 'Score',
+  draws: 'Draws',
+  wins: 'wins',
+  boardLabel: 'board',
+  cellLabel: 'cell',
+  winner: 'wins!',
+  draw: 'Draw!',
+  rematch: 'Rematch',
+  changeSettings: 'Change settings',
+  resumeTitle: 'Ongoing game found',
+  resumeQuestion: 'Resume where you left off?',
+  resume: 'Resume',
+  discard: 'Discard',
+  moveNumber: 'move',
+};
+
+export type Messages = typeof pt;
+
+export const messages: Record<Language, Messages> = { pt, en };
+
+// Padrão: idioma do navegador se for pt ou en; senão inglês (REQ-STT-17).
+export function detectLanguage(): Language {
+  const nav = typeof navigator !== 'undefined' ? navigator.language : '';
+  return nav.toLowerCase().startsWith('pt') ? 'pt' : 'en';
+}
