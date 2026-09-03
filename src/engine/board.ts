@@ -69,6 +69,22 @@ export function resultOf(board: Board, tiebreak: Tiebreak): Result {
   return 'draw';
 }
 
+// Linhas fechadas pelo vencedor deste tabuleiro (REQ-RISCO-07): cada item é a
+// trinca de índices que forma a linha. Derivado do estado, nada é guardado.
+// Vitória por maioria e empate não têm linha, então devolvem lista vazia.
+export function winningLines(board: Board, tiebreak: Tiebreak): number[][] {
+  const winner = resultOf(board, tiebreak);
+  if (winner !== 'X' && winner !== 'O') return [];
+  const results = board.cells.map((cell) => childResult(cell, tiebreak));
+  // Mesmo critério do resultOf: na variante "conta pros dois", tabuleiro
+  // empatado completa a linha de qualquer jogador (RN-RISCO-02).
+  const matches = (r: Result) =>
+    r === winner || (tiebreak === 'both' && board.depth > 1 && r === 'draw');
+  return LINES.filter((line) => line.every((i) => matches(results[i]))).map((line) => [
+    ...line,
+  ]);
+}
+
 // Um tabuleiro é jogável se nem ele nem nenhum ancestral está decidido.
 export function isPlayablePath(board: Board, path: Path, tiebreak: Tiebreak): boolean {
   let node: Board | Player | null = board;
