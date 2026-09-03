@@ -219,9 +219,27 @@ button.ghost {
   filter: url(#squiggle);
 }
 
+/* As 4 linhas de cada jogo da velha são traços contínuos pintados como
+   fundo do grid (não bordas por célula), pra não haver emenda nos cruzamentos. */
+
 .macro-board > .board-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  background-image: linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line)),
+    linear-gradient(var(--line), var(--line));
+  background-repeat: no-repeat;
+  background-size:
+    5px 100%,
+    5px 100%,
+    100% 5px,
+    100% 5px;
+  background-position:
+    33.33% 0,
+    66.66% 0,
+    0 33.33%,
+    0 66.66%;
 }
 
 .mini-board {
@@ -229,18 +247,25 @@ button.ghost {
   padding: 7px;
 }
 
-.macro-board > .board-grid > .mini-board:not(:nth-child(3n)) {
-  border-right: 5px solid var(--line);
-}
-
-.macro-board > .board-grid > .mini-board:nth-child(-n + 6) {
-  border-bottom: 5px solid var(--line);
-}
-
 .mini-board > .board-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
+  background-image: linear-gradient(var(--line-soft), var(--line-soft)),
+    linear-gradient(var(--line-soft), var(--line-soft)),
+    linear-gradient(var(--line-soft), var(--line-soft)),
+    linear-gradient(var(--line-soft), var(--line-soft));
+  background-repeat: no-repeat;
+  background-size:
+    2px 100%,
+    2px 100%,
+    100% 2px,
+    100% 2px;
+  background-position:
+    33.33% 0,
+    66.66% 0,
+    0 33.33%,
+    0 66.66%;
 }
 
 .cell {
@@ -254,14 +279,6 @@ button.ghost {
   border: none;
   border-radius: 0;
   background: transparent;
-}
-
-.mini-board .cell:not(:nth-child(3n)) {
-  border-right: 2px solid var(--line-soft);
-}
-
-.mini-board .cell:nth-child(-n + 6) {
-  border-bottom: 2px solid var(--line-soft);
 }
 
 .cell:hover:not(:disabled) {
