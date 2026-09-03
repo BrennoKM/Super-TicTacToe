@@ -1,15 +1,14 @@
 # Promptaria: o que NÃO vai pro git do projeto.
 #
-# Cenário de versionamento:
-# - Versionado (compartilhado pelo time):
-#   CLAUDE.md, .claude/specs.md, .claude/guia-validacao.md, .claude/regras-projeto.md
-# - Não versionado (cada dev mantém o seu):
-#   .claude/skills/  → cada dev instala/atualiza Promptaria localmente
-#   .claude/memory/  → memória pessoal de cada dev
+# Cenário de versionamento (projeto aberto a colaboração externa):
+# - Versionado (pra quem for ajudar enxergar processo e specs):
+#   CLAUDE.md, .claude/processos/, .claude/regras-projeto.md,
+#   .claude/templates/, .claude/skills/, .specs/
+# - Não versionado (pessoal, não é conhecimento do projeto):
+#   .claude/memory/ → memória local de quem está codando
 #
 # Pra compartilhar aprendizado entre devs, use a seção "Aprendizados do projeto"
-# no CLAUDE.md (versionado).
+# no CLAUDE.md (versionado) em vez de depender de memória pessoal.
 
-skills/
 memory/
 !.gitignore
