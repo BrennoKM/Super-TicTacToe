@@ -1,12 +1,12 @@
-// Som de escrita sintetizado (spec SOM). Sem arquivos de áudio: ruído filtrado
-// com envelope curto, que é como se imita risco de caneta, lápis ou giz.
+// Som de escrita sintetizado (spec SOM). Sem arquivos de áudio: o risco é
+// reproduzido pela física do atrito, com trem de grãos, ressonância do material
+// e envelope de gesto.
 
 export type Theme = 'light' | 'dark';
 export type Mark = 'X' | 'O';
 export type StrikeScale = 'small' | 'big';
 
 let context: AudioContext | null = null;
-let noise: AudioBuffer | null = null;
 let muted = false;
 
 export function setMuted(value: boolean): void {
@@ -26,7 +26,6 @@ export function resetAudio(): void {
     // contexto já encerrado
   }
   context = null;
-  noise = null;
 }
 
 // RN-SOM-04: falha de áudio nunca atrapalha o jogo.
@@ -46,14 +45,37 @@ function ensureContext(): AudioContext | null {
   }
 }
 
-function noiseBuffer(ctx: AudioContext): AudioBuffer {
-  if (noise === null || noise.sampleRate !== ctx.sampleRate) {
-    const length = Math.floor(ctx.sampleRate * 1.5);
-    noise = ctx.createBuffer(1, length, ctx.sampleRate);
-    const data = noise.getChannelData(0);
-    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+// Risco é atrito de agarra e escorrega: o giz ou o grafite prende e solta
+// centenas de vezes por segundo, e cada solta é um micro impacto. Por isso o
+// material bruto é um trem de grãos irregulares, não ruído contínuo (que soa
+// como chiado). A densidade e o tamanho do grão é que dão a textura.
+function scratchBuffer(ctx: AudioContext, duration: number, chalk: boolean): AudioBuffer {
+  const rate = ctx.sampleRate;
+  const length = Math.max(1, Math.ceil(rate * duration));
+  const buffer = ctx.createBuffer(1, length, rate);
+  const data = buffer.getChannelData(0);
+
+  // Giz na lousa agarra mais vezes por segundo e com grão mais curto e seco;
+  // lápis no papel tem grão um pouco mais espaçado e macio.
+  const grainsPerSecond = chalk ? 1500 : 950;
+  const grainLength = rate * (chalk ? 0.0035 : 0.0065);
+
+  let cursor = 0;
+  while (cursor < length) {
+    const amplitude = 0.3 + Math.random() * 0.7;
+    const grain = Math.max(4, Math.round(grainLength * (0.5 + Math.random())));
+    for (let j = 0; j < grain && cursor + j < length; j++) {
+      const decay = Math.exp(-j / (grain * 0.35));
+      data[cursor + j] += (Math.random() * 2 - 1) * amplitude * decay;
+    }
+    // Intervalo irregular entre agarras, que é o que soa como atrito real.
+    cursor += Math.max(1, Math.round((rate / grainsPerSecond) * (0.35 + Math.random() * 1.7)));
   }
-  return noise;
+
+  let peak = 0;
+  for (let i = 0; i < length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  if (peak > 0) for (let i = 0; i < length; i++) data[i] /= peak;
+  return buffer;
 }
 
 interface ScratchOptions {
@@ -65,52 +87,50 @@ interface ScratchOptions {
   startAt?: number;
 }
 
-// Um risco de escrita é ruído sustentado com atrito irregular, não um estalo.
-// Por isso o ganho vem de uma curva com granulado aleatório (fricção) em vez
-// de rampa simples, e a banda do filtro varre enquanto o traço "anda".
+// Monta um traço: grãos de atrito passando por passa-alta, ressonância do
+// material e envelope do gesto da mão.
 function scratch(ctx: AudioContext, options: ScratchOptions): void {
   const { duration, gain, theme } = options;
   const start = ctx.currentTime + (options.startAt ?? 0);
   const chalk = theme === 'dark';
 
   const source = ctx.createBufferSource();
-  source.buffer = noiseBuffer(ctx);
-  source.loop = true;
-  source.loopStart = Math.random();
-  source.loopEnd = source.loopStart + 0.4;
-  source.playbackRate.value = 0.85 + Math.random() * 0.3;
+  source.buffer = scratchBuffer(ctx, duration, chalk);
+  source.playbackRate.value = 0.92 + Math.random() * 0.16;
 
-  // Tira o peso grave, que é o que dava sensação de batida.
+  // Tira o peso grave, que dá sensação de batida em vez de arrasto.
   const highpass = ctx.createBiquadFilter();
   highpass.type = 'highpass';
-  highpass.frequency.value = chalk ? 1100 : 650;
+  highpass.frequency.value = chalk ? 900 : 500;
 
-  const band = ctx.createBiquadFilter();
-  band.type = 'bandpass';
-  const from = (chalk ? 3200 : 1900) * (0.9 + Math.random() * 0.2);
-  const to = (chalk ? 2100 : 1150) * (0.9 + Math.random() * 0.2);
-  band.frequency.setValueAtTime(from, start);
-  band.frequency.linearRampToValueAtTime(to, start + duration);
-  band.Q.value = chalk ? 1.1 : 0.7;
+  // Ressonância: é ela que dá o timbre do material. O giz canta mais agudo
+  // na lousa; o grafite no papel responde mais baixo e abafado.
+  const body = ctx.createBiquadFilter();
+  body.type = 'bandpass';
+  const from = (chalk ? 3400 : 1750) * (0.92 + Math.random() * 0.16);
+  const to = (chalk ? 2400 : 1250) * (0.92 + Math.random() * 0.16);
+  body.frequency.setValueAtTime(from, start);
+  // A mão desacelera no fim do traço, e a banda acompanha.
+  body.frequency.linearRampToValueAtTime(to, start + duration);
+  body.Q.value = chalk ? 2.6 : 1.6;
 
-  // Envelope com fricção: ataque suave o bastante pra não estalar, corpo
-  // sustentado e granulado aleatório por cima (o arrastar do traço).
-  const steps = Math.max(24, Math.round(duration * 320));
+  // Envelope do gesto: a mão encosta, arrasta e levanta.
+  const steps = Math.max(32, Math.round(duration * 240));
   const curve = new Float32Array(steps);
-  const grit = chalk ? 0.55 : 0.32;
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    const attack = Math.min(1, t / 0.14);
-    const decay = Math.pow(1 - t, chalk ? 0.9 : 1.3);
-    const friction = 1 - grit + grit * Math.random();
-    curve[i] = gain * attack * decay * friction;
+    const attack = Math.min(1, t / 0.12);
+    const release = t > 0.82 ? (1 - t) / 0.18 : 1;
+    // Pressão da mão variando devagar ao longo do traço.
+    const pressure = 0.78 + 0.22 * Math.sin(t * Math.PI * (1.5 + Math.random()));
+    curve[i] = gain * attack * release * pressure;
   }
   curve[steps - 1] = 0;
 
   const envelope = ctx.createGain();
   envelope.gain.setValueCurveAtTime(curve, start, duration);
 
-  source.connect(highpass).connect(band).connect(envelope).connect(ctx.destination);
+  source.connect(highpass).connect(body).connect(envelope).connect(ctx.destination);
   source.start(start);
   source.stop(start + duration + 0.03);
 }
@@ -120,11 +140,13 @@ export function playMark(mark: Mark, theme: Theme): void {
   const ctx = ensureContext();
   if (ctx === null) return;
   try {
+    // Tempos de gesto humano: cada perna do X leva perto de 0,3 s, com a mão
+    // reposicionando entre elas; o O é um traço contínuo mais longo.
     if (mark === 'X') {
-      scratch(ctx, { duration: 0.15, gain: 0.3, theme });
-      scratch(ctx, { duration: 0.15, gain: 0.28, theme, startAt: 0.13 });
+      scratch(ctx, { duration: 0.3, gain: 0.3, theme });
+      scratch(ctx, { duration: 0.28, gain: 0.28, theme, startAt: 0.34 });
     } else {
-      scratch(ctx, { duration: 0.34, gain: 0.26, theme });
+      scratch(ctx, { duration: 0.55, gain: 0.26, theme });
     }
   } catch {
     // áudio indisponível: segue em silêncio
@@ -137,7 +159,7 @@ export function playStrike(scale: StrikeScale, theme: Theme): void {
   if (ctx === null) return;
   try {
     scratch(ctx, {
-      duration: scale === 'big' ? 0.85 : 0.45,
+      duration: scale === 'big' ? 1.15 : 0.6,
       gain: scale === 'big' ? 0.4 : 0.32,
       theme,
     });
