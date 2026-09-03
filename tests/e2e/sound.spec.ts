@@ -11,6 +11,7 @@ test('clipes de som carregam sem erro em ambos os temas (REQ-SOM-01..03)', async
   });
 
   await page.goto('/');
+  await page.getByTestId('mode-local').click();
   await page.getByTestId('start').click();
 
   // Tema caderno: X, O e um risco pequeno.
@@ -19,7 +20,9 @@ test('clipes de som carregam sem erro em ambos os temas (REQ-SOM-01..03)', async
   await page.waitForTimeout(400);
 
   // Tema lousa.
+  await page.getByTestId('settings-open').click();
   await page.getByTestId('theme-toggle').click();
+  await page.getByTestId('settings-close').click();
   await page.getByTestId('cell-4.1').click();
   await page.waitForTimeout(400);
 
@@ -32,6 +35,7 @@ test('desfazer não solicita clipe novo (RN-SOM-05)', async ({ page }) => {
     if (r.url().includes('/sounds/')) requests.push(r.url());
   });
   await page.goto('/');
+  await page.getByTestId('mode-local').click();
   await page.getByTestId('start').click();
   await page.getByTestId('cell-4.4').click();
   await page.waitForTimeout(300);
@@ -62,7 +66,6 @@ test('créditos das gravações ficam no modal de informações (licença de atr
 // RN-SOM-07, 10: sons de jogadas próximas não tocam por cima uns dos outros.
 test('sons de jogadas seguidas ficam em fila, sem sobrepor (RN-SOM-07, 10)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('start').click();
 
   const events = await page.evaluate(async () => {
     const soundModule = '/src/audio/sound.ts';

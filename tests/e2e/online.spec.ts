@@ -11,7 +11,7 @@ async function openApp(page: Page) {
 
 async function createRoom(host: Page, name: string): Promise<string> {
   await openApp(host);
-  await host.getByTestId('mode').selectOption('online');
+  await host.getByTestId('mode-online').click();
   await host.getByTestId('name-1').fill(name);
   await host.getByTestId('start').click();
   await expect(host.getByTestId('online-waiting')).toBeVisible();
@@ -20,10 +20,9 @@ async function createRoom(host: Page, name: string): Promise<string> {
 
 async function joinRoom(guest: Page, code: string, name: string) {
   await openApp(guest);
-  await guest.getByTestId('mode').selectOption('online');
-  await guest.getByTestId('online-action').selectOption('join');
-  await guest.getByTestId('name-1').fill(name);
   await guest.getByTestId('join-code').fill(code);
+  await guest.getByTestId('join-go').click();
+  await guest.getByTestId('name-1').fill(name);
   await guest.getByTestId('start').click();
 }
 
@@ -130,7 +129,7 @@ test('sala abandonada não aceita mais ninguém (AC-CONEXAO-01)', async ({ conte
 
   // O criador desiste antes de alguém entrar.
   await host.getByRole('button', { name: /Voltar|Back/ }).click();
-  await expect(host.getByTestId('start')).toBeVisible();
+  await expect(host.getByTestId('mode-online')).toBeVisible();
 
   // Quem tenta entrar recebe erro, em vez de conectar numa sala fantasma.
   await joinRoom(guest, code, 'Bia');
@@ -141,9 +140,9 @@ test('criar sala de novo após sair funciona (AC-CONEXAO-02)', async ({ context 
   const host = await context.newPage();
   const first = await createRoom(host, 'Ana');
   await host.getByRole('button', { name: /Voltar|Back/ }).click();
-  await expect(host.getByTestId('start')).toBeVisible();
+  await expect(host.getByTestId('mode-online')).toBeVisible();
 
-  await host.getByTestId('mode').selectOption('online');
+  await host.getByTestId('mode-online').click();
   await host.getByTestId('start').click();
   await expect(host.getByTestId('online-waiting')).toBeVisible();
   const second = (await host.getByTestId('room-code').first().innerText()).trim();
@@ -155,13 +154,12 @@ test('criar sala de novo após sair funciona (AC-CONEXAO-02)', async ({ context 
 test('entrar em código inexistente falha com saída, sem travar (AC-CONEXAO-03, RN-CONEXAO-05)', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('stt.transport', 'broadcast'));
   await page.goto('/');
-  await page.getByTestId('mode').selectOption('online');
-  await page.getByTestId('online-action').selectOption('join');
   await page.getByTestId('join-code').fill('ZZZZZZ');
+  await page.getByTestId('join-go').click();
   await page.getByTestId('start').click();
 
   await expect(page.getByTestId('online-error')).toBeVisible({ timeout: 10_000 });
   // Sempre há saída da tela de erro.
   await page.getByRole('button', { name: /Voltar|Back/ }).click();
-  await expect(page.getByTestId('start')).toBeVisible();
+  await expect(page.getByTestId('mode-online')).toBeVisible();
 });

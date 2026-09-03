@@ -3,6 +3,19 @@
 :root {
   --font-hand: 'Patrick Hand', 'Comic Sans MS', cursive;
   --font-title: 'Caveat', 'Patrick Hand', cursive;
+  /* Fonte sem ambiguidade pro código da sala (spec MENU): em letra de mão,
+     O/0, I/l/1 ficam parecidos demais pra algo que precisa ser digitado
+     certo por outra pessoa. */
+  --font-code: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+
+  /* Um raio, uma altura de controle pra tudo (botão, campo, seletor):
+     antes cada elemento tinha seu próprio border-radius (alguns cantos
+     pontudos, outros arredondados) e o botão "colar" da fileira de código
+     era mais baixo que o campo e o "Entrar" ao lado, então a interface
+     parecia sem padrão nenhum (spec MENU). */
+  --radius: 12px;
+  --control-h: 3rem;
+  --mode-h: 4.6rem;
 }
 
 :root[data-theme='light'] {
@@ -16,6 +29,7 @@
   --card-bg: rgba(255, 255, 255, 0.55);
   --mark-x: #c0392b;
   --mark-o: #1f5fa8;
+  --accent: var(--mark-o);
   /* Mesma duração que o som do risco (clipe ÷ velocidade de reprodução em
      src/audio/sound.ts), pro traço desenhado acompanhar o traço ouvido. */
   --strike-dur-small: 0.24s;
@@ -33,6 +47,7 @@
   --card-bg: rgba(255, 255, 255, 0.06);
   --mark-x: #ffd77a;
   --mark-o: #9fd8ff;
+  --accent: var(--mark-o);
   --strike-dur-small: 0.391s;
   --strike-dur-big: 0.566s;
 }
@@ -89,12 +104,24 @@ h3 {
   align-items: center;
 }
 
-/* Toggle claro/escuro: desligado = caderno (sol), ligado = lousa (lua). */
+/* Botão de ícone quadrado, mesma altura/raio dos outros controles: usado
+   pra info, configurações e "colar código". */
+.icon-btn {
+  width: var(--control-h);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 
-.theme-switch input {
+/* Barrinha deslizante genérica, reaproveitada por qualquer liga/desliga
+   (tema, som): só o ícone muda por subclasse. */
+.switch input {
   appearance: none;
   width: 54px;
   height: 28px;
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 2px solid var(--line);
@@ -104,8 +131,7 @@ h3 {
   cursor: pointer;
 }
 
-.theme-switch input::after {
-  content: '☀️';
+.switch input::after {
   position: absolute;
   top: 50%;
   left: 3px;
@@ -115,21 +141,41 @@ h3 {
   transition: transform 0.2s ease;
 }
 
+.switch input:checked::after {
+  transform: translateX(25px);
+}
+
+/* Tema: desligado = caderno (sol), ligado = lousa (lua). */
+.theme-switch input::after {
+  content: '☀️';
+}
 .theme-switch input:checked::after {
   content: '🌙';
-  transform: translateX(25px);
+}
+
+/* Som: desligado = som ligado (alto-falante), ligado = mudo. */
+.sound-switch input::after {
+  content: '🔊';
+}
+.sound-switch input:checked::after {
+  content: '🔇';
 }
 
 button,
 select,
 input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
   font-family: var(--font-hand);
   font-size: 1rem;
   color: var(--ink);
   background: var(--card-bg);
   border: 2px solid var(--line);
-  border-radius: 12px 4px 14px 5px; /* traço irregular, desenhado à mão */
+  border-radius: var(--radius);
   padding: 0.35rem 0.8rem;
+  min-height: var(--control-h);
   cursor: pointer;
 }
 
@@ -146,19 +192,39 @@ button:disabled {
   cursor: default;
 }
 
+/* "primary" nunca muda espessura de borda (fica sempre 2px em tudo), só
+   ganha um preenchimento com a cor de destaque e peso de fonte, senão a
+   borda mais grossa por si só já quebrava o padrão visual entre botões. */
 button.primary {
-  border-width: 3px;
   font-weight: bold;
+  background: color-mix(in srgb, var(--accent) 15%, var(--card-bg));
+  border-color: var(--accent);
 }
 
 button.ghost {
   border-style: dashed;
 }
 
+/* Anel de foco só quando faz sentido (navegação por teclado); clique de
+   mouse não deixa a marca de foco do navegador pra trás, feio e sem
+   relação com o traço desenhado à mão do resto da interface. */
+button:focus,
+select:focus,
+input:focus {
+  outline: none;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .card {
   background: var(--card-bg);
   border: 2px solid var(--line);
-  border-radius: 14px 6px 16px 8px;
+  border-radius: var(--radius);
   padding: 1rem;
   margin: 1rem 0;
 }
@@ -168,7 +234,107 @@ button.ghost {
   margin-inline: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.9rem;
+}
+
+/* ---- Home (spec MENU): código de convite em destaque, modos em 1x2 ---- */
+
+.join-card label {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.join-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.join-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-field {
+  font-family: var(--font-code);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.home-divider::before,
+.home-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+/* 1x2: "Criar sala" numa linha de largura total (ação online, mais peso),
+   "1 jogador" e "2 jogadores" lado a lado abaixo, mesma altura entre os
+   três (--mode-h). */
+.modes-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modes-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.mode-btn {
+  height: var(--mode-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.mode-btn .icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.mode-btn .label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  line-height: 1.2;
+}
+
+.mode-btn .title {
+  font-size: 0.95rem;
+}
+
+.mode-btn .sub {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font-weight: normal;
+}
+
+.modes-pair .mode-btn {
+  flex-direction: column;
+  text-align: center;
+  gap: 0.2rem;
+}
+
+.modes-pair .mode-btn .label-group {
+  align-items: center;
+}
+
+.home-back {
+  align-self: flex-start;
 }
 
 .setup label {
@@ -342,6 +508,10 @@ button.ghost {
 
 .cell {
   aspect-ratio: 1;
+  /* A célula é um <button> só pelo semântico de clique/toque; ela não é um
+     controle de linha única, então a altura mínima padronizada (--control-h)
+     não se aplica, ou o tabuleiro inteiro cresceria além da tela. */
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -470,10 +640,17 @@ button.ghost {
 }
 
 .room-code {
-  font-family: var(--font-title);
-  font-size: 2.4rem;
-  letter-spacing: 0.35em;
+  font-family: var(--font-code);
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
   margin: 0.3rem 0;
+}
+
+.host-code-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
 }
 
 .online-banner {
@@ -545,11 +722,14 @@ button.ghost {
   padding: 0.3rem 0.5rem;
 }
 
+/* Circular por natureza (é o botão em destaque do grupo), mas com a mesma
+   espessura de borda 2px de todo o resto: só a forma o distingue, não a
+   borda (spec MENU). */
 .play-button {
   width: 3.4rem;
   height: 3.4rem;
+  min-height: 0;
   border-radius: 50%;
-  border-width: 3px;
   font-size: 1.2rem;
   padding: 0;
   display: flex;
@@ -597,4 +777,19 @@ button.ghost {
 
 .modal-card a {
   color: var(--mark-o);
+}
+
+/* Painel de configurações (mesmo modal, conteúdo em fileiras). */
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
 }

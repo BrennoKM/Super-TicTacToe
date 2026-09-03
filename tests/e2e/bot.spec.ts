@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 
 test('bot responde à jogada humana em tempo perceptivelmente imediato', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('mode').selectOption('bot');
+  await page.getByTestId('mode-bot').click();
   await page.getByTestId('difficulty').selectOption('easy');
   await page.getByTestId('name-1').fill('Ana');
   await page.getByTestId('start').click();
@@ -21,7 +21,7 @@ test('bot responde à jogada humana em tempo perceptivelmente imediato', async (
 
 test('desfazer contra o bot desfaz o par de jogadas (AC-STT-08)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('mode').selectOption('bot');
+  await page.getByTestId('mode-bot').click();
   await page.getByTestId('difficulty').selectOption('easy');
   await page.getByTestId('start').click();
 
@@ -37,7 +37,7 @@ test('desfazer contra o bot desfaz o par de jogadas (AC-STT-08)', async ({ page 
 
 test('partida contra o bot é retomável e mantém o modo (REQ-STT-14)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('mode').selectOption('bot');
+  await page.getByTestId('mode-bot').click();
   await page.getByTestId('difficulty').selectOption('easy');
   await page.getByTestId('name-1').fill('Ana');
   await page.getByTestId('start').click();

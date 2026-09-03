@@ -8,6 +8,7 @@ import { P2PSession } from '../p2p/session';
 import type { SessionSnapshot } from '../p2p/session';
 import { connectTransport } from '../p2p/transport';
 import type { Role, TransportAttempt, TransportError } from '../p2p/transport';
+import { Ellipsis } from './Ellipsis';
 import { addToLibrary, removeFromLibrary } from '../replay/library';
 import type { LibraryEntry } from '../replay/library';
 import { clearOnline, saveOnline } from '../storage/persist';
@@ -63,6 +64,39 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
   themeRef.current = theme;
   const [replayOpen, setReplayOpen] = useState(false);
   const [leaveAsk, setLeaveAsk] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  // REQ-MENU-06: link de convite com o código embutido; quem abrir cai
+  // direto na tela de escolher o nome (App.tsx lê ?join= e pula a home).
+  function inviteUrl(roomCode: string): string {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('join', roomCode);
+    return url.toString();
+  }
+
+  async function copyCode(roomCode: string) {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      // Sem permissão de área de transferência: o código já está visível na tela.
+    }
+  }
+
+  async function shareCode(roomCode: string) {
+    const url = inviteUrl(roomCode);
+    if (navigator.share) {
+      try {
+        await navigator.share({ url });
+      } catch {
+        // Cancelado pelo usuário: nada a fazer.
+      }
+    } else {
+      await copyCode(url);
+    }
+  }
   const libraryIdRef = useRef<string | null>(null);
   const prevResultRef = useRef<SessionSnapshot['state']['result']>(null);
 
@@ -285,10 +319,21 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
             <p className="room-code" data-testid="room-code">
               {code}
             </p>
+            <div className="host-code-actions">
+              <button type="button" onClick={() => void copyCode(code)} data-testid="copy-code">
+                {codeCopied ? msgs.codeCopied : msgs.copyCode}
+              </button>
+              <button type="button" onClick={() => void shareCode(code)} data-testid="share-code">
+                {msgs.shareCode}
+              </button>
+            </div>
             <p className="mode-tag">{msgs.roomCodeHint}</p>
           </>
         )}
-        <p>{stage === 'waiting' ? msgs.waitingGuest : msgs.connecting}</p>
+        <p>
+          {stage === 'waiting' ? msgs.waitingGuest : msgs.connecting}
+          <Ellipsis />
+        </p>
         <button type="button" onClick={endMatch}>
           {msgs.back}
         </button>
@@ -335,7 +380,10 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
     <>
       {disconnected && (
         <div className="card online-banner" data-testid="online-reconnect">
-          <p>{msgs.waitingReconnect}</p>
+          <p>
+            {msgs.waitingReconnect}
+            <Ellipsis />
+          </p>
           <div className="controls">
             <button type="button" className="primary" onClick={manualReconnect}>
               {msgs.reconnect}
@@ -401,10 +449,18 @@ export function OnlineGame({ msgs, init, theme, onExit }: OnlineGameProps) {
         </div>
       )}
 
-      {undoSent && <p className="toast" data-testid="undo-sent">{msgs.undoSent}</p>}
+      {undoSent && (
+        <p className="toast" data-testid="undo-sent">
+          {msgs.undoSent}
+          <Ellipsis />
+        </p>
+      )}
       {undoDenied && <p className="toast" data-testid="undo-denied">{msgs.undoDeniedMsg}</p>}
       {rematchSent && snapshot.state.result !== null && (
-        <p className="toast">{msgs.rematchSent}</p>
+        <p className="toast">
+          {msgs.rematchSent}
+          <Ellipsis />
+        </p>
       )}
 
       {undoAsk !== null && (

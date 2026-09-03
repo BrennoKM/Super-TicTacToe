@@ -10,6 +10,7 @@ const WIN_SCRIPT = [
 
 async function playFullMatch(page: Page) {
   await page.goto('/');
+  await page.getByTestId('mode-local').click();
   await page.getByTestId('name-1').fill('Ana');
   await page.getByTestId('name-2').fill('Bia');
   await page.getByTestId('start').click();
@@ -138,7 +139,9 @@ test('quadro do GIF usa o fundo do tema (AC-REPLAY2-01, 02)', async ({ page }) =
   expect(light.g).toBeGreaterThan(200);
 
   // Tema escuro: fundo de lousa (escuro).
+  await page.getByTestId('settings-open').click();
   await page.getByTestId('theme-toggle').click();
+  await page.getByTestId('settings-close').click();
   const dark = await sample();
   expect(dark.r).toBeLessThan(120);
   expect(dark.g).toBeLessThan(120);

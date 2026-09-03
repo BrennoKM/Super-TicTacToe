@@ -18,6 +18,7 @@ import {
 import type { SavedOnline } from '../storage/persist';
 import { addToLibrary, removeFromLibrary } from '../replay/library';
 import type { LibraryEntry } from '../replay/library';
+import { normalizeRoomCode } from '../p2p/protocol';
 import { LibraryScreen } from './LibraryScreen';
 import { OnlineGame } from './OnlineGame';
 import type { OnlineInit } from './OnlineGame';
@@ -55,8 +56,25 @@ export function App() {
   const [pendingOnline, setPendingOnline] = useState<SavedOnline | null>(() => loadOnline());
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [replayEntry, setReplayEntry] = useState<LibraryEntry | null>(null);
   const [leaveAsk, setLeaveAsk] = useState(false);
+
+  // REQ-MENU-05: um link de convite (?join=CODIGO) pula a home e vai direto
+  // pra escolha de nome. Lido uma única vez; a URL é limpa em seguida pra
+  // um F5 no meio da partida não tentar entrar de novo.
+  const [joinCodeFromUrl] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = new URLSearchParams(window.location.search).get('join');
+    return raw ? normalizeRoomCode(raw) : null;
+  });
+  useEffect(() => {
+    if (!joinCodeFromUrl) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('join');
+    window.history.replaceState(null, '', url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const language: Language = prefs.language ?? detectLanguage();
   const msgs = messages[language];
@@ -72,13 +90,16 @@ export function App() {
   }, [theme, language]);
 
   useEffect(() => {
-    if (!infoOpen) return;
+    if (!infoOpen && !settingsOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setInfoOpen(false);
+      if (e.key === 'Escape') {
+        setInfoOpen(false);
+        setSettingsOpen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [infoOpen]);
+  }, [infoOpen, settingsOpen]);
 
   const updatePrefs = (patch: Partial<Preferences>) => {
     setPrefs((prev) => {
@@ -299,16 +320,6 @@ export function App() {
       <header>
         <h1>{msgs.appTitle}</h1>
         <div className="header-controls">
-          <button
-            type="button"
-            className="ghost"
-            data-testid="info-open"
-            title={msgs.infoLabel}
-            aria-label={msgs.infoLabel}
-            onClick={() => setInfoOpen(true)}
-          >
-            ℹ️
-          </button>
           {!online && replayEntry === null && (
             <button
               type="button"
@@ -321,36 +332,24 @@ export function App() {
           )}
           <button
             type="button"
-            className="ghost"
-            data-testid="mute-toggle"
-            aria-pressed={prefs.muted}
-            title={prefs.muted ? msgs.soundOff : msgs.soundOn}
-            aria-label={prefs.muted ? msgs.soundOff : msgs.soundOn}
-            onClick={() => updatePrefs({ muted: !prefs.muted })}
+            className="icon-btn"
+            data-testid="info-open"
+            title={msgs.infoLabel}
+            aria-label={msgs.infoLabel}
+            onClick={() => setInfoOpen(true)}
           >
-            {prefs.muted ? '🔇' : '🔊'}
+            ℹ️
           </button>
-          <label
-            className="theme-switch"
-            title={`${msgs.theme}: ${theme === 'dark' ? msgs.themeDark : msgs.themeLight}`}
+          <button
+            type="button"
+            className="icon-btn"
+            data-testid="settings-open"
+            title={msgs.settingsLabel}
+            aria-label={msgs.settingsLabel}
+            onClick={() => setSettingsOpen(true)}
           >
-            <input
-              type="checkbox"
-              data-testid="theme-toggle"
-              aria-label={msgs.theme}
-              checked={theme === 'dark'}
-              onChange={(e) => updatePrefs({ theme: e.target.checked ? 'dark' : 'light' })}
-            />
-          </label>
-          <select
-            value={language}
-            onChange={(e) => updatePrefs({ language: e.target.value as Language })}
-            data-testid="language"
-            aria-label={msgs.language}
-          >
-            <option value="pt">PT</option>
-            <option value="en">EN</option>
-          </select>
+            ⚙️
+          </button>
         </div>
       </header>
 
@@ -434,6 +433,7 @@ export function App() {
         <SetupScreen
           msgs={msgs}
           initial={initialSetup}
+          initialJoinCode={joinCodeFromUrl}
           onStart={startMatch}
           onStartOnline={(init) => {
             updatePrefs({
@@ -502,6 +502,68 @@ export function App() {
             <button type="button" data-testid="leave-cancel" onClick={() => setLeaveAsk(false)}>
               {msgs.keepPlaying}
             </button>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div
+          className="modal-backdrop"
+          data-testid="settings-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSettingsOpen(false);
+          }}
+        >
+          <div className="card modal-card" role="dialog" aria-modal="true" aria-label={msgs.settingsLabel}>
+            <h2>{msgs.settingsLabel}</h2>
+            <div className="settings-list">
+              <label className="settings-row">
+                {msgs.language}
+                <select
+                  value={language}
+                  onChange={(e) => updatePrefs({ language: e.target.value as Language })}
+                  data-testid="language"
+                  aria-label={msgs.language}
+                >
+                  <option value="pt">PT</option>
+                  <option value="en">EN</option>
+                </select>
+              </label>
+              <label className="settings-row">
+                {msgs.theme}: {theme === 'dark' ? msgs.themeDark : msgs.themeLight}
+                <span className="switch theme-switch">
+                  <input
+                    type="checkbox"
+                    data-testid="theme-toggle"
+                    aria-label={msgs.theme}
+                    checked={theme === 'dark'}
+                    onChange={(e) => updatePrefs({ theme: e.target.checked ? 'dark' : 'light' })}
+                  />
+                </span>
+              </label>
+              <label className="settings-row">
+                {prefs.muted ? msgs.soundOff : msgs.soundOn}
+                <span className="switch sound-switch">
+                  <input
+                    type="checkbox"
+                    data-testid="mute-toggle"
+                    aria-label={prefs.muted ? msgs.soundOff : msgs.soundOn}
+                    checked={prefs.muted}
+                    onChange={(e) => updatePrefs({ muted: e.target.checked })}
+                  />
+                </span>
+              </label>
+            </div>
+            <div className="controls">
+              <button
+                type="button"
+                className="primary"
+                data-testid="settings-close"
+                onClick={() => setSettingsOpen(false)}
+              >
+                {msgs.infoClose}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { exportEntry } from '../replay/exchange';
 import { generateGif } from '../replay/gif';
 import type { LibraryEntry } from '../replay/library';
 import { BoardView } from './BoardView';
+import { Ellipsis } from './Ellipsis';
 
 interface ReplayScreenProps {
   msgs: Messages;
@@ -145,7 +146,14 @@ export function ReplayScreen({ msgs, entry, theme = 'light', onBack }: ReplayScr
             }
           }}
         >
-          {generating ? msgs.generatingGif : msgs.downloadGif}
+          {generating ? (
+            <>
+              {msgs.generatingGif}
+              <Ellipsis />
+            </>
+          ) : (
+            msgs.downloadGif
+          )}
         </button>
         <button type="button" data-testid="replay-export" onClick={() => downloadEntryJson(entry)}>
           {msgs.exportMatch}

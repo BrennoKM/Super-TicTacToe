@@ -5,6 +5,7 @@ test.use({ viewport: { width: 375, height: 667 }, hasTouch: true });
 
 test('tabuleiro cabe na tela do celular e as células são tocáveis', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('mode-local').click();
   await page.getByTestId('start').click();
 
   // Sem rolagem horizontal.

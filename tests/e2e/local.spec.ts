@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 
 async function startGame(page: Page) {
   await page.goto('/');
+  await page.getByTestId('mode-local').click();
   await page.getByTestId('name-1').fill('Ana');
   await page.getByTestId('name-2').fill('Bia');
   await page.getByTestId('start').click();
@@ -49,12 +50,12 @@ test('sair da partida em andamento com confirmação (AC-CONEXAO-05, 06)', async
   await page.getByTestId('leave-cancel').click();
   await expect(page.getByTestId('cell-4.0')).toHaveText('X');
 
-  // Confirmar volta pra configuração e não deixa partida pendente.
+  // Confirmar volta pra home e não deixa partida pendente.
   await page.getByTestId('leave-match').click();
   await page.getByTestId('leave-confirm').click();
-  await expect(page.getByTestId('start')).toBeVisible();
+  await expect(page.getByTestId('mode-local')).toBeVisible();
   await page.reload();
-  await expect(page.getByTestId('start')).toBeVisible();
+  await expect(page.getByTestId('mode-local')).toBeVisible();
   await expect(page.getByTestId('resume-dialog')).toBeHidden();
 });
 
