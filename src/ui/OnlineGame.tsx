@@ -5,7 +5,7 @@ import { generateRoomCode } from '../p2p/protocol';
 import { P2PSession } from '../p2p/session';
 import type { SessionSnapshot } from '../p2p/session';
 import { connectTransport } from '../p2p/transport';
-import type { Role, TransportError } from '../p2p/transport';
+import type { Role, TransportAttempt, TransportError } from '../p2p/transport';
 import { addToLibrary, removeFromLibrary } from '../replay/library';
 import type { LibraryEntry } from '../replay/library';
 import { clearOnline, saveOnline } from '../storage/persist';
@@ -32,11 +32,18 @@ interface OnlineGameProps {
 
 type Stage = 'connecting' | 'waiting' | 'playing';
 
+// REQ-CONEXAO-02 e 03: limites de tempo da conexão e da reconexão automática.
+const CONNECT_TIMEOUT_MS = 20_000;
+const RECONNECT_DELAYS_MS = [4000, 8000, 16_000, 32_000, 60_000];
+
+// Erro local de tempo esgotado, somado aos erros do transporte.
+type OnlineError = TransportError | { kind: 'tempo-esgotado' };
+
 export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
   const [code, setCode] = useState(init.code);
   const [stage, setStage] = useState<Stage>('connecting');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
-  const [error, setError] = useState<TransportError | null>(null);
+  const [error, setError] = useState<OnlineError | null>(null);
   const [undoAsk, setUndoAsk] = useState<number | null>(null);
   const [undoDenied, setUndoDenied] = useState(false);
   const [undoSent, setUndoSent] = useState(false);
@@ -46,7 +53,11 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
   const sessionRef = useRef<P2PSession | null>(null);
   const savedRef = useRef<SavedOnline | null>(init.saved ?? null);
   const retriesRef = useRef(0);
+  const attemptRef = useRef<TransportAttempt | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTriesRef = useRef(0);
   const [replayOpen, setReplayOpen] = useState(false);
+  const [leaveAsk, setLeaveAsk] = useState(false);
   const libraryIdRef = useRef<string | null>(null);
   const prevResultRef = useRef<SessionSnapshot['state']['result']>(null);
 
@@ -68,10 +79,36 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
 
   const connect = useCallback(
     (roomCode: string) => {
+      // RN-CONEXAO-04: nunca duas tentativas ao mesmo tempo; a anterior é
+      // cancelada e o peer dela destruído antes de abrir outra.
+      attemptRef.current?.cancel();
+      attemptRef.current = null;
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+
       setError(null);
       setStage(init.role === 'host' ? 'waiting' : 'connecting');
-      connectTransport(init.role, roomCode, {
+
+      // REQ-CONEXAO-02: o guest não fica em "Conectando..." pra sempre quando
+      // o canal WebRTC não abre; o host segue aguardando por tempo indefinido,
+      // porque esperar alguém entrar na sala é o comportamento esperado.
+      if (init.role === 'guest') {
+        timeoutRef.current = setTimeout(() => {
+          if (sessionRef.current === null) {
+            attemptRef.current?.cancel();
+            attemptRef.current = null;
+            setError({ kind: 'tempo-esgotado' });
+          }
+        }, CONNECT_TIMEOUT_MS);
+      }
+
+      attemptRef.current = connectTransport(init.role, roomCode, {
         onOpen: (transport) => {
+          if (timeoutRef.current !== null) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          retriesRef.current = 0;
+          reconnectTriesRef.current = 0;
           const saved = savedRef.current;
           sessionRef.current = new P2PSession(
             transport,
@@ -137,6 +174,10 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
           );
         },
         onError: (err) => {
+          if (timeoutRef.current !== null) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
           // Código em uso ao criar: gera outro e tenta de novo (até 3 vezes).
           if (err.kind === 'codigo-em-uso' && init.role === 'host' && retriesRef.current < 3) {
             retriesRef.current += 1;
@@ -155,6 +196,13 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
 
   useEffect(() => {
     connect(code);
+    // Desmontar a tela destrói o peer: sem isso a sala continuaria registrada
+    // no broker aceitando conexões fantasma (REQ-CONEXAO-01).
+    return () => {
+      attemptRef.current?.cancel();
+      attemptRef.current = null;
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,24 +210,46 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
   const disconnected =
     snapshot !== null && snapshot.phase === 'closed' && snapshot.state.result === null;
 
-  // Queda no meio da partida: tenta reconectar sozinho a cada 4 segundos.
+  // REQ-CONEXAO-03: queda no meio da partida tenta reconectar sozinho com
+  // intervalo crescente e limite de tentativas; depois disso, só no manual.
   useEffect(() => {
-    if (!disconnected) return;
-    const timer = setInterval(() => connect(code), 4000);
-    return () => clearInterval(timer);
-  }, [disconnected, code, connect]);
+    if (!disconnected) {
+      reconnectTriesRef.current = 0;
+      return;
+    }
+    const tries = reconnectTriesRef.current;
+    if (tries >= RECONNECT_DELAYS_MS.length) return;
+    const timer = setTimeout(() => {
+      reconnectTriesRef.current = tries + 1;
+      connect(code);
+    }, RECONNECT_DELAYS_MS[tries]);
+    return () => clearTimeout(timer);
+  }, [disconnected, code, connect, snapshot]);
 
   function endMatch() {
+    // RN-CONEXAO-02: avisa o adversário antes de destruir a conexão.
     session?.leave();
+    attemptRef.current?.cancel();
+    attemptRef.current = null;
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
     clearOnline(code, init.role);
     onExit();
+  }
+
+  function manualReconnect() {
+    reconnectTriesRef.current = 0;
+    connect(code);
   }
 
   // --- Telas fora de jogo ---------------------------------------------------
 
   if (error) {
     const message =
-      error.kind === 'sala-nao-encontrada' ? msgs.errRoomNotFound : msgs.errBroker;
+      error.kind === 'sala-nao-encontrada'
+        ? msgs.errRoomNotFound
+        : error.kind === 'tempo-esgotado'
+          ? msgs.errTimeout
+          : msgs.errBroker;
     return (
       <section className="card online-status" data-testid="online-error">
         <p>{message}</p>
@@ -255,7 +325,7 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
         <div className="card online-banner" data-testid="online-reconnect">
           <p>{msgs.waitingReconnect}</p>
           <div className="controls">
-            <button type="button" className="primary" onClick={() => connect(code)}>
+            <button type="button" className="primary" onClick={manualReconnect}>
               {msgs.reconnect}
             </button>
             <button type="button" onClick={endMatch} data-testid="end-match">
@@ -291,10 +361,33 @@ export function OnlineGame({ msgs, init, onExit }: OnlineGameProps) {
         <span className="mode-tag">
           {msgs.roomCode}: <strong data-testid="room-code">{code}</strong>
         </span>
-        <button type="button" onClick={endMatch} data-testid="end-match">
-          {msgs.endMatch}
+        <button
+          type="button"
+          data-testid="end-match"
+          onClick={() => {
+            // REQ-CONEXAO-06: partida em andamento pede confirmação.
+            if (snapshot.state.result === null) setLeaveAsk(true);
+            else endMatch();
+          }}
+        >
+          {msgs.leaveMatch}
         </button>
       </div>
+
+      {leaveAsk && (
+        <div className="card online-banner" data-testid="leave-dialog">
+          <h2>{msgs.leaveConfirmTitle}</h2>
+          <p>{msgs.leaveConfirmBody}</p>
+          <div className="controls">
+            <button type="button" className="primary" data-testid="leave-confirm" onClick={endMatch}>
+              {msgs.leaveConfirm}
+            </button>
+            <button type="button" data-testid="leave-cancel" onClick={() => setLeaveAsk(false)}>
+              {msgs.keepPlaying}
+            </button>
+          </div>
+        </div>
+      )}
 
       {undoSent && <p className="toast" data-testid="undo-sent">{msgs.undoSent}</p>}
       {undoDenied && <p className="toast" data-testid="undo-denied">{msgs.undoDeniedMsg}</p>}
