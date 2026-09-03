@@ -57,7 +57,7 @@ function scratchBuffer(ctx: AudioContext, duration: number, chalk: boolean): Aud
 
   // Giz na lousa agarra mais vezes por segundo e com grão mais curto e seco;
   // lápis no papel tem grão um pouco mais espaçado e macio.
-  const grainsPerSecond = chalk ? 1500 : 950;
+  const grainsPerSecond = chalk ? 1150 : 780;
   const grainLength = rate * (chalk ? 0.0035 : 0.0065);
 
   let cursor = 0;
@@ -107,8 +107,8 @@ function scratch(ctx: AudioContext, options: ScratchOptions): void {
   // na lousa; o grafite no papel responde mais baixo e abafado.
   const body = ctx.createBiquadFilter();
   body.type = 'bandpass';
-  const from = (chalk ? 3400 : 1750) * (0.92 + Math.random() * 0.16);
-  const to = (chalk ? 2400 : 1250) * (0.92 + Math.random() * 0.16);
+  const from = (chalk ? 3200 : 1700) * (0.94 + Math.random() * 0.12);
+  const to = (chalk ? 2750 : 1450) * (0.94 + Math.random() * 0.12);
   body.frequency.setValueAtTime(from, start);
   // A mão desacelera no fim do traço, e a banda acompanha.
   body.frequency.linearRampToValueAtTime(to, start + duration);
@@ -119,8 +119,8 @@ function scratch(ctx: AudioContext, options: ScratchOptions): void {
   const curve = new Float32Array(steps);
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    const attack = Math.min(1, t / 0.12);
-    const release = t > 0.82 ? (1 - t) / 0.18 : 1;
+    const attack = Math.min(1, t / 0.08);
+    const release = t > 0.88 ? (1 - t) / 0.12 : 1;
     // Pressão da mão variando devagar ao longo do traço.
     const pressure = 0.78 + 0.22 * Math.sin(t * Math.PI * (1.5 + Math.random()));
     curve[i] = gain * attack * release * pressure;
@@ -140,13 +140,14 @@ export function playMark(mark: Mark, theme: Theme): void {
   const ctx = ensureContext();
   if (ctx === null) return;
   try {
-    // Tempos de gesto humano: cada perna do X leva perto de 0,3 s, com a mão
-    // reposicionando entre elas; o O é um traço contínuo mais longo.
+    // O X são dois traços rápidos, e entre eles a mão tira o giz ou o lápis
+    // da superfície: por isso há silêncio real no meio, não um traço só
+    // partido. O O é um movimento único, contínuo e mais demorado.
     if (mark === 'X') {
-      scratch(ctx, { duration: 0.3, gain: 0.3, theme });
-      scratch(ctx, { duration: 0.28, gain: 0.28, theme, startAt: 0.34 });
+      scratch(ctx, { duration: 0.24, gain: 0.3, theme });
+      scratch(ctx, { duration: 0.22, gain: 0.28, theme, startAt: 0.42 });
     } else {
-      scratch(ctx, { duration: 0.55, gain: 0.26, theme });
+      scratch(ctx, { duration: 0.8, gain: 0.24, theme });
     }
   } catch {
     // áudio indisponível: segue em silêncio
@@ -159,7 +160,7 @@ export function playStrike(scale: StrikeScale, theme: Theme): void {
   if (ctx === null) return;
   try {
     scratch(ctx, {
-      duration: scale === 'big' ? 1.15 : 0.6,
+      duration: scale === 'big' ? 1.7 : 0.95,
       gain: scale === 'big' ? 0.4 : 0.32,
       theme,
     });
